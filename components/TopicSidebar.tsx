@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Disc } from 'lucide-react';
+import { ChevronRight, Layers, Hash } from 'lucide-react';
 import { CURRICULUM_DATA } from '../constants';
 
 interface TopicSidebarProps {
@@ -15,42 +15,56 @@ const TopicSidebar: React.FC<TopicSidebarProps> = ({ currentWeekId, focusTopic, 
   if (!currentWeekData) return null;
 
   return (
-    <div className="h-full bg-slate-900 border-r border-slate-800 flex flex-col w-64 shrink-0">
-      <div className="p-4 border-b border-slate-800 bg-slate-950/50">
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Curriculum</h3>
-        <h2 className="text-lg font-bold text-slate-100 leading-tight">{currentWeekData.title}</h2>
-        <p className="text-xs text-slate-500 mt-2">{currentWeekData.description}</p>
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="p-5 border-b border-slate-800">
+        <div className="flex items-center gap-2 text-slate-500 mb-2">
+            <Layers size={14} />
+            <span className="text-xs font-bold uppercase tracking-wider">Sub-Concepts</span>
+        </div>
+        <h2 className="text-base font-bold text-slate-100 leading-snug">{currentWeekData.title}</h2>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      {/* List */}
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1 custom-scrollbar">
         {currentWeekData.topics.map((topic, idx) => {
             const isActive = topic === focusTopic;
             return (
                 <motion.button
                     key={idx}
                     onClick={() => onTopicClick(topic)}
-                    whileHover={{ x: 4 }}
+                    whileHover={{ x: 2, backgroundColor: 'rgba(30, 41, 59, 0.5)' }}
+                    whileTap={{ scale: 0.98 }}
                     className={`
-                        w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex items-center justify-between group
+                        w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex items-start gap-3 group border
                         ${isActive 
-                            ? 'bg-cyan-950/50 text-cyan-400 border border-cyan-900/50' 
-                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'}
+                            ? 'bg-slate-800 border-cyan-900/50 shadow-sm' 
+                            : 'border-transparent hover:border-slate-800 text-slate-400 hover:text-slate-200'}
                     `}
                 >
-                    <div className="flex items-center gap-3">
-                        <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-slate-700 group-hover:bg-slate-500'}`} />
-                        <span className="truncate w-40">{topic}</span>
+                    <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 text-[10px] font-mono border ${isActive ? 'bg-cyan-950 border-cyan-800 text-cyan-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                        {idx + 1}
                     </div>
-                    {isActive && <ChevronRight size={14} className="opacity-80" />}
+                    <div className="flex-1">
+                        <span className={`block leading-tight ${isActive ? 'text-cyan-100 font-medium' : ''}`}>
+                            {topic}
+                        </span>
+                    </div>
+                    {isActive && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shadow-[0_0_5px_rgba(34,211,238,0.8)]" />}
                 </motion.button>
             )
         })}
       </div>
       
-      <div className="p-4 border-t border-slate-800">
-         <div className="p-3 rounded bg-slate-800/50 border border-slate-700 text-xs text-slate-400 leading-relaxed">
-            <span className="text-cyan-500 font-bold block mb-1">Agent Strategy:</span>
-            Select a subconcept to explicitly direct the agent's focus for the next interaction.
+      {/* Footer / Tip */}
+      <div className="p-4 border-t border-slate-800 bg-slate-900/30">
+         <div className="flex gap-2">
+             <div className="mt-0.5">
+                 <div className="w-1 h-full min-h-[20px] bg-slate-700 rounded-full" />
+             </div>
+             <p className="text-[10px] text-slate-500 leading-relaxed">
+                Clicking a topic directs the agent to focus its next lesson or assessment on that specific concept.
+             </p>
          </div>
       </div>
     </div>
