@@ -2,9 +2,17 @@ import { GoogleGenAI } from "@google/genai";
 import { LearnerState, ParsedAgentResponse } from '../types';
 import { SYSTEM_PROMPT } from '../constants';
 
-// We assume the API key is available in the environment variables
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Initialize lazily to avoid module-level errors if env vars aren't ready
+let aiClient: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+  if (!aiClient) {
+    // Fallback to empty string if undefined to prevent constructor throw, though it will fail on call if invalid
+    const key = process.env.API_KEY || ''; 
+    aiClient = new GoogleGenAI({ apiKey: key });
+  }
+  return aiClient;
+};
 
 // Helper to parse the strict output format
 const parseAgentResponse = (text: string): ParsedAgentResponse => {
@@ -55,13 +63,17 @@ const parseAgentResponse = (text: string): ParsedAgentResponse => {
 export const sendMessageToAgent = async (
   userMessage: string, 
   currentState: LearnerState,
-  chatHistory: Array<{role: 'user' | 'model', parts: [{text: string}]}> = []
+  chatHistory: Array<{role: 'user' | 'model', parts: {text: string}[]}> = []
 ): Promise<ParsedAgentResponse> => {
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please set process.env.API_KEY.");
+  
+  // Ensure Key Check
+  if (!process.env.API_KEY) {
+     // We allow the UI to handle this error
+     console.warn("API Key missing in process.env");
   }
 
   try {
+    const ai = getAiClient();
     const model = 'gemini-3-flash-preview'; // Optimal for reasoning tasks
 
     // Construct the full context including the hidden state
@@ -70,14 +82,6 @@ export const sendMessageToAgent = async (
 ${JSON.stringify(currentState, null, 2)}
     `;
 
-    // We don't use ChatSession because we need to inject the rigid state at the end of every turn manually to ensure the "Control Loop" works as designed.
-    // Instead, we construct the history for generateContent.
-    
-    // Convert previous chat history to the format expected by generateContent
-    // Note: The prompt is massive, so we rely on the model's large context window.
-    
-    // We prepend the system prompt to the user's first message or use systemInstruction config
-    
     const finalPrompt = userMessage 
       ? `${userMessage}\n\n${stateContext}`
       : `[SYSTEM: START_SESSION]\n${stateContext}`; // Initial trigger

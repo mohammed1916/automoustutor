@@ -1,7 +1,7 @@
 import { LearnerState } from './types';
 
 export const INITIAL_LEARNER_STATE: LearnerState = {
-  currentWeek: 'WEEK 1',
+  currentWeek: 'Week 1',
   focusTopic: 'Set Theory and Foundations',
   masteryLevels: {
     'Week 1': 0,
@@ -20,6 +20,75 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   lastAction: 'INIT',
   historySummary: 'New student. No prior history.'
 };
+
+export const CURRICULUM_DATA = [
+  {
+    id: 'Week 1',
+    title: 'Set Theory & Foundations',
+    description: 'Foundational logic, sets, relations, and functions.',
+    topics: ['Number systems', 'Sets and set operations', 'Relations and their types', 'Functions and their types']
+  },
+  {
+    id: 'Week 2',
+    title: 'Coordinate Geometry',
+    description: 'Slopes, lines, and coordinate systems.',
+    topics: ['Rectangular coordinate system', 'Slope of a line', 'Parallel and perpendicular lines', 'Representations of a line', 'General equation of a line', 'Straight-line fit']
+  },
+  {
+    id: 'Week 3',
+    title: 'Quadratic Functions',
+    description: 'Parabolas, vertices, and quadratic equations.',
+    topics: ['Quadratic functions', 'Minima, maxima, vertex, slope', 'Quadratic equations']
+  },
+  {
+    id: 'Week 4',
+    title: 'Polynomials',
+    description: 'Operations, graphs, and algorithms for polynomials.',
+    topics: ['Polynomial operations', 'Polynomial algorithms', 'Graphs of polynomials', 'X-intercepts and multiplicities', 'End behavior', 'Polynomial graph creation']
+  },
+  {
+    id: 'Week 5',
+    title: 'Functions',
+    description: 'Exponential, composite, and inverse functions.',
+    topics: ['Horizontal and vertical line tests', 'Exponential functions', 'Composite functions', 'Inverse functions']
+  },
+  {
+    id: 'Week 6',
+    title: 'Logarithmic Functions',
+    description: 'Logarithms, properties, and equations.',
+    topics: ['Properties of logarithms', 'Graphs of logarithmic functions', 'Exponential equations', 'Logarithmic equations']
+  },
+  {
+    id: 'Week 7',
+    title: 'Limits & Continuity',
+    description: 'Sequences, limits, and continuous functions.',
+    topics: ['Functions of one variable', 'Graphs and tangents', 'Limits of sequences', 'Limits of functions', 'Continuity']
+  },
+  {
+    id: 'Week 8',
+    title: 'Derivatives',
+    description: 'Differentiation, critical points, and approximation.',
+    topics: ['Differentiability and derivatives', 'Computing derivatives', 'L’Hôpital’s rule', 'Tangents and linear approximation', 'Critical points and extrema']
+  },
+  {
+    id: 'Week 9',
+    title: 'Integrals',
+    description: 'Area under curves and the fundamental theorem.',
+    topics: ['Area under a curve', 'Integral of a function', 'Relationship between derivatives and integrals']
+  },
+  {
+    id: 'Week 10',
+    title: 'Graph Theory Basics',
+    description: 'BFS, DFS, DAGs and graph representations.',
+    topics: ['Graph representations', 'Breadth-first search (BFS)', 'Depth-first search (DFS)', 'Applications of BFS/DFS', 'Directed acyclic graphs (DAGs)', 'Complexity analysis', 'Topological sorting']
+  },
+  {
+    id: 'Week 11',
+    title: 'Advanced Algorithms',
+    description: 'Shortest paths, MSTs, and dynamic programming on graphs.',
+    topics: ['Longest path', 'Transitive closure', 'Matrix multiplication for graphs', 'Single-source shortest paths', 'Dijkstra’s algorithm', 'Bellman–Ford algorithm', 'All-pairs shortest paths', 'Floyd–Warshall algorithm', 'Minimum spanning trees', 'Prim’s algorithm', 'Kruskal’s algorithm']
+  }
+];
 
 export const SYSTEM_PROMPT = `
 You are an AUTONOMOUS ADAPTIVE LEARNING AGENT for an 11-week undergraduate mathematics curriculum.
@@ -146,7 +215,7 @@ You MUST respond with these 6 sections in this EXACT order. Use the headers exac
 (A valid JSON object representing the NEW learner state. Do not use Markdown code blocks for this section, just raw JSON.
 The JSON must match this interface:
 {
-  "currentWeek": "string (e.g., WEEK 1)",
+  "currentWeek": "string (e.g., Week 1)",
   "focusTopic": "string",
   "masteryLevels": { "Week 1": number (0-100), ... "Week 11": number },
   "misconceptions": ["string"],
