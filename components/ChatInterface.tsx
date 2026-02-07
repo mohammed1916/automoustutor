@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Message } from '../types';
 import { Send, User, Bot, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -45,7 +47,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
             </div>
             
             <div
-              className={`max-w-[85%] rounded-lg p-4 leading-relaxed whitespace-pre-wrap shadow-lg ${
+              className={`max-w-[85%] rounded-lg p-4 leading-relaxed shadow-lg ${
                 msg.role === 'user'
                   ? 'bg-slate-800 border border-slate-700 text-slate-100'
                   : 'bg-slate-900 border border-emerald-900/30 text-slate-200'
@@ -56,7 +58,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                   {msg.metadata.action}
                 </div>
               )}
-              {msg.content}
+              <ReactMarkdown 
+                className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/10"
+                remarkPlugins={[remarkGfm]}
+              >
+                {msg.content}
+              </ReactMarkdown>
             </div>
           </div>
         ))}

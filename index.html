@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Adaptive Math Agent</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
       // Polyfill for process.env to prevent crashes in environments where it is missing
       if (typeof process === 'undefined') {
@@ -24,7 +24,9 @@
     "recharts": "https://esm.sh/recharts@2.10.0?external=react,react-dom,prop-types,react-is",
     "@google/genai": "https://esm.sh/@google/genai@1.37.0",
     "lucide-react": "https://esm.sh/lucide-react@0.344.0?external=react",
-    "framer-motion": "https://esm.sh/framer-motion@10.16.4?external=react,react-dom"
+    "framer-motion": "https://esm.sh/framer-motion@10.16.4?external=react,react-dom",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1?external=react,react-dom",
+    "remark-gfm": "https://esm.sh/remark-gfm@4.0.0"
   }
 }
 </script>
