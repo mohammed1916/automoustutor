@@ -3,6 +3,8 @@ import { Message } from '../types';
 import { Send, User, Bot, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -60,7 +62,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
               )}
               <ReactMarkdown 
                 className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/10"
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
               >
                 {msg.content}
               </ReactMarkdown>

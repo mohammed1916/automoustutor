@@ -134,7 +134,7 @@ const App: React.FC = () => {
   };
 
   // Calculate overall progress for Home Card
-  const overallProgress = Object.values(learnerState.masteryLevels).reduce<number>((a, b) => a + b, 0) / 11;
+  const overallProgress = Object.values(learnerState.masteryLevels).reduce((a, b) => a + (b as number), 0) / 11;
 
   // --- VIEW: HOME PAGE ---
   if (view === 'HOME') {

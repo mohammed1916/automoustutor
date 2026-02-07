@@ -206,7 +206,11 @@ You MUST respond with these 6 sections in this EXACT order. Use the headers exac
 (One word only: TEACH | ASSESS | RETEACH | REVIEW | ADVANCE)
 
 3. CONTENT
-(The actual message to the learner. Use clear, engaging Markdown. Do not include the section header inside the content.)
+(The actual message to the learner. Use clear, engaging Markdown. 
+IMPORTANT: Use LaTeX for ALL mathematical expressions. 
+- Enclose inline math in single dollar signs, e.g., $x^2 + y^2 = r^2$. 
+- Enclose block math in double dollar signs, e.g., $$ \int_{0}^{\infty} f(x) dx $$.
+Do not include the section header inside the content.)
 
 4. VERIFICATION
 (Double check your own math and logic here)
