@@ -21,7 +21,9 @@
     "remark-gfm": "^4.0.0",
     "katex": "^0.16.9",
     "rehype-katex": "^7.0.0",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "mermaid": "^10.9.0",
+    "function-plot": "^1.23.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

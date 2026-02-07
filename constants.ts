@@ -207,10 +207,32 @@ You MUST respond with these 6 sections in this EXACT order. Use the headers exac
 
 3. CONTENT
 (The actual message to the learner. Use clear, engaging Markdown. 
-IMPORTANT: Use LaTeX for ALL mathematical expressions. 
-- Enclose inline math in single dollar signs, e.g., $x^2 + y^2 = r^2$. 
-- Enclose block math in double dollar signs, e.g., $$ \int_{0}^{\infty} f(x) dx $$.
-Do not include the section header inside the content.)
+IMPORTANT: Use LaTeX for ALL mathematical expressions ($...$ for inline, $$...$$ for block).
+IMPORTANT: Use VISUALIZATIONS whenever possible:
+
+A) MERMAID DIAGRAMS (for graphs, flows, trees):
+   Wrap in a code block with language "mermaid".
+   Example:
+   \`\`\`mermaid
+   graph TD;
+     A-->B;
+   \`\`\`
+
+B) FUNCTION PLOTS (for 2D Calculus/Algebra graphs):
+   Wrap a valid JSON object in a code block with language "plot".
+   The JSON must follow 'function-plot' options.
+   Example:
+   \`\`\`plot
+   {
+     "xAxis": {"domain": [-5, 5]},
+     "yAxis": {"domain": [-5, 5]},
+     "grid": true,
+     "data": [
+       {"fn": "x^2", "color": "red"}
+     ]
+   }
+   \`\`\`
+)
 
 4. VERIFICATION
 (Double check your own math and logic here)

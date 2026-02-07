@@ -5,6 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import Mermaid from './Mermaid';
+import FunctionPlot from './FunctionPlot';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -61,9 +63,41 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                 </div>
               )}
               <ReactMarkdown 
-                className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/10"
+                className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0"
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
+                components={{
+                  code({node, inline, className, children, ...props}: any) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const codeContent = String(children).replace(/\n$/, '');
+
+                    if (!inline && match) {
+                      if (match[1] === 'mermaid') {
+                        return <Mermaid chart={codeContent} />;
+                      }
+                      if (match[1] === 'plot') {
+                        try {
+                           const plotOptions = JSON.parse(codeContent);
+                           return <FunctionPlot options={plotOptions} />;
+                        } catch (e) {
+                           return <div className="text-red-400 text-xs">Invalid Plot JSON</div>;
+                        }
+                      }
+                    }
+
+                    return !inline && match ? (
+                      <div className="rounded-md bg-black/30 border border-white/10 p-3 my-3 overflow-x-auto">
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      </div>
+                    ) : (
+                      <code className="bg-slate-700/50 px-1 py-0.5 rounded text-cyan-200 font-mono text-xs" {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                }}
               >
                 {msg.content}
               </ReactMarkdown>
