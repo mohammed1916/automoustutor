@@ -72,12 +72,13 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, image?: string) => {
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      image: image 
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -85,12 +86,27 @@ const App: React.FC = () => {
 
     try {
       // Build history for API
-      const apiHistory = messages.map(m => ({
-        role: m.role === 'agent' ? 'model' : 'user' as 'model' | 'user',
-        parts: [{ text: m.role === 'agent' ? (m.metadata?.raw || m.content) : m.content }]
-      }));
+      const apiHistory = messages.map(m => {
+        const parts: any[] = [{ text: m.role === 'agent' ? (m.metadata?.raw || m.content) : m.content }];
+        
+        // If message has image, add it to history as well so model remembers context
+        if (m.image) {
+            const cleanBase64 = m.image.split(',')[1] || m.image;
+            parts.unshift({
+                inlineData: {
+                    mimeType: 'image/png',
+                    data: cleanBase64
+                }
+            });
+        }
+        
+        return {
+            role: m.role === 'agent' ? 'model' : 'user' as 'model' | 'user',
+            parts: parts
+        };
+      });
       
-      const response = await sendMessageToAgent(text, learnerState, apiHistory);
+      const response = await sendMessageToAgent(text, learnerState, apiHistory, image);
 
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),

@@ -63,12 +63,12 @@ const parseAgentResponse = (text: string): ParsedAgentResponse => {
 export const sendMessageToAgent = async (
   userMessage: string, 
   currentState: LearnerState,
-  chatHistory: Array<{role: 'user' | 'model', parts: {text: string}[]}> = []
+  chatHistory: Array<{role: 'user' | 'model', parts: {text?: string, inlineData?: any}[]}> = [],
+  imageBase64?: string
 ): Promise<ParsedAgentResponse> => {
   
   // Ensure Key Check
   if (!process.env.API_KEY) {
-     // We allow the UI to handle this error
      console.warn("API Key missing in process.env");
   }
 
@@ -86,15 +86,30 @@ ${JSON.stringify(currentState, null, 2)}
       ? `${userMessage}\n\n${stateContext}`
       : `[SYSTEM: START_SESSION]\n${stateContext}`; // Initial trigger
 
+    // Prepare current user parts
+    const currentUserParts: any[] = [{ text: finalPrompt }];
+
+    // Attach image if present
+    if (imageBase64) {
+      // Strip metadata header if present (e.g. "data:image/png;base64,")
+      const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+      currentUserParts.unshift({
+        inlineData: {
+          mimeType: 'image/png',
+          data: cleanBase64
+        }
+      });
+    }
+
     const result = await ai.models.generateContent({
       model,
       config: {
         systemInstruction: SYSTEM_PROMPT,
-        temperature: 0.2, // Low temperature for consistent formatting
+        temperature: 0.2,
       },
       contents: [
         ...chatHistory,
-        { role: 'user', parts: [{ text: finalPrompt }] }
+        { role: 'user', parts: currentUserParts }
       ]
     });
 

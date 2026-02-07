@@ -1,3 +1,4 @@
+
 export interface LearnerState {
   currentWeek: string;
   focusTopic: string;
@@ -23,6 +24,7 @@ export interface Message {
   content: string;
   timestamp: number;
   metadata?: ParsedAgentResponse;
+  image?: string; // Base64 Data URL
 }
 
 export enum AgentAction {
