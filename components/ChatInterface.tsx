@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
-import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Square, Video, Smartphone } from 'lucide-react';
+import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Square, Video, Smartphone, Radio } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -14,10 +14,11 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (text: string, attachment?: string) => void;
   onStartSession?: () => void;
+  onStartLiveSession?: () => void;
   remoteStream?: MediaStream | null;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onStartSession, remoteStream }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onStartSession, onStartLiveSession, remoteStream }) => {
   const [inputValue, setInputValue] = useState('');
   const [showDrawingPad, setShowDrawingPad] = useState(false);
   
@@ -512,45 +513,46 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                     </div>
                 )}
 
-                <ReactMarkdown 
-                    className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0"
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                    components={{
-                    code({node, inline, className, children, ...props}: any) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeContent = String(children).replace(/\n$/, '');
+                <div className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0">
+                  <ReactMarkdown 
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                      code({node, inline, className, children, ...props}: any) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          const codeContent = String(children).replace(/\n$/, '');
 
-                        if (!inline && match) {
-                        if (match[1] === 'mermaid') {
-                            return <Mermaid chart={codeContent} />;
-                        }
-                        if (match[1] === 'plot') {
-                            try {
-                            const plotOptions = JSON.parse(codeContent);
-                            return <FunctionPlot options={plotOptions} />;
-                            } catch (e) {
-                            return <div className="text-red-400 text-xs">Invalid Plot JSON</div>;
-                            }
-                        }
-                        }
+                          if (!inline && match) {
+                          if (match[1] === 'mermaid') {
+                              return <Mermaid chart={codeContent} />;
+                          }
+                          if (match[1] === 'plot') {
+                              try {
+                              const plotOptions = JSON.parse(codeContent);
+                              return <FunctionPlot options={plotOptions} />;
+                              } catch (e) {
+                              return <div className="text-red-400 text-xs">Invalid Plot JSON</div>;
+                              }
+                          }
+                          }
 
-                        return !inline && match ? (
-                        <div className="rounded-md bg-black/30 border border-white/10 p-3 my-3 overflow-x-auto">
-                            <code className={className} {...props}>
-                            {children}
-                            </code>
-                        </div>
-                        ) : (
-                        <code className="bg-slate-700/50 px-1 py-0.5 rounded text-cyan-200 font-mono text-xs" {...props}>
-                            {children}
-                        </code>
-                        );
-                    }
-                    }}
-                >
-                    {msg.content}
-                </ReactMarkdown>
+                          return !inline && match ? (
+                          <div className="rounded-md bg-black/30 border border-white/10 p-3 my-3 overflow-x-auto">
+                              <code className={className} {...props}>
+                              {children}
+                              </code>
+                          </div>
+                          ) : (
+                          <code className="bg-slate-700/50 px-1 py-0.5 rounded text-cyan-200 font-mono text-xs" {...props}>
+                              {children}
+                          </code>
+                          );
+                      }
+                      }}
+                  >
+                      {msg.content}
+                  </ReactMarkdown>
+                </div>
                 </div>
             </div>
             ))
@@ -624,6 +626,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                                 >
                                     <PenTool size={18} />
                                 </button>
+                                {onStartLiveSession && (
+                                    <button
+                                        type="button"
+                                        onClick={onStartLiveSession}
+                                        className="p-2 text-red-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors animate-pulse"
+                                        title="Start Live Session"
+                                        disabled={isLoading}
+                                    >
+                                        <Radio size={18} />
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={startRecording}

@@ -11,6 +11,7 @@ import WeekTimeline from './components/WeekTimeline';
 import TopicSidebar from './components/TopicSidebar';
 import AuthModal from './components/AuthModal';
 import MobileConnectView from './components/MobileConnectView';
+import LiveSession from './components/LiveSession';
 import { Menu, X, ArrowLeft, GraduationCap, Sparkles, Smartphone, QrCode, Link as LinkIcon, Check, LogOut, User as UserIcon, LogIn } from 'lucide-react';
 import { Peer } from 'peerjs';
 
@@ -41,6 +42,9 @@ const App: React.FC = () => {
   const [hasStarted, setHasStarted] = useState(false);
 
   const [isMobileStreaming, setIsMobileStreaming] = useState(false);
+  
+  // Live Session State
+  const [isLiveSessionOpen, setIsLiveSessionOpen] = useState(false);
 
   // WebRTC / Mobile Connection State
   const [mobileConnectId, setMobileConnectId] = useState<string | null>(null);
@@ -383,6 +387,13 @@ const App: React.FC = () => {
         onSuccess={handleLoginSuccess} 
     />
 
+    {isLiveSessionOpen && (
+      <LiveSession 
+        onClose={() => setIsLiveSessionOpen(false)} 
+        onTransfer={() => setShowQrModal(true)}
+      />
+    )}
+
     {view === 'HOME' ? (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
         <div className="absolute top-6 right-6 z-20">
@@ -530,6 +541,7 @@ const App: React.FC = () => {
                   isLoading={isLoading} 
                   onSendMessage={handleSendMessage}
                   onStartSession={startSession}
+                  onStartLiveSession={() => setIsLiveSessionOpen(true)}
                   remoteStream={remoteStream}
                />
           </div>

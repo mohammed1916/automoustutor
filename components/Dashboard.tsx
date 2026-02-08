@@ -87,39 +87,42 @@ const Dashboard: React.FC<DashboardProps> = ({ state, lastAgentResponse }) => {
             <div>
               <div className="text-slate-500 mb-1">RATIONALE</div>
               <div className="bg-slate-800 p-3 rounded border border-slate-700 leading-relaxed opacity-90 overflow-x-auto">
-                <ReactMarkdown 
-                  className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:p-2 prose-pre:rounded-sm"
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {lastAgentResponse.rationale}
-                </ReactMarkdown>
+                <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:p-2 prose-pre:rounded-sm">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {lastAgentResponse.rationale}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
             
             <div>
               <div className="text-green-500/80 mb-1 font-bold text-[10px] uppercase tracking-wider">Verification</div>
               <div className="bg-slate-800 p-3 rounded border border-green-900/30 overflow-x-auto">
-                 <ReactMarkdown 
-                  className="prose prose-invert prose-sm max-w-none prose-p:text-green-100 prose-strong:text-green-400"
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {lastAgentResponse.verification}
-                </ReactMarkdown>
+                 <div className="prose prose-invert prose-sm max-w-none prose-p:text-green-100 prose-strong:text-green-400">
+                   <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {lastAgentResponse.verification}
+                  </ReactMarkdown>
+                 </div>
               </div>
             </div>
 
             <div>
               <div className="text-purple-500/80 mb-1 font-bold text-[10px] uppercase tracking-wider">Next Intent</div>
               <div className="bg-slate-800 p-3 rounded border border-purple-900/30 overflow-x-auto">
-                 <ReactMarkdown 
-                  className="prose prose-invert prose-sm max-w-none prose-p:text-purple-100"
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {lastAgentResponse.nextIntent}
-                </ReactMarkdown>
+                 <div className="prose prose-invert prose-sm max-w-none prose-p:text-purple-100">
+                   <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {lastAgentResponse.nextIntent}
+                  </ReactMarkdown>
+                 </div>
               </div>
             </div>
           </div>
