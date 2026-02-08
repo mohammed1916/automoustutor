@@ -1,16 +1,17 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Layers, Hash } from 'lucide-react';
-import { CURRICULUM_DATA } from '../constants';
+import { Layers } from 'lucide-react';
+import { CurriculumWeek } from '../types';
 
 interface TopicSidebarProps {
   currentWeekId: string;
   focusTopic: string;
   onTopicClick: (topic: string) => void;
+  curriculum: CurriculumWeek[];
 }
 
-const TopicSidebar: React.FC<TopicSidebarProps> = ({ currentWeekId, focusTopic, onTopicClick }) => {
-  const currentWeekData = CURRICULUM_DATA.find(w => w.id === currentWeekId);
+const TopicSidebar: React.FC<TopicSidebarProps> = ({ currentWeekId, focusTopic, onTopicClick, curriculum }) => {
+  const currentWeekData = curriculum.find(w => w.id === currentWeekId);
 
   if (!currentWeekData) return null;
 

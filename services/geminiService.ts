@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { LearnerState, ParsedAgentResponse } from '../types';
-import { SYSTEM_PROMPT } from '../constants';
+import { LearnerState, ParsedAgentResponse, CurriculumWeek } from '../types';
 
 // Initialize lazily to avoid module-level errors if env vars aren't ready
 let aiClient: GoogleGenAI | null = null;
@@ -60,11 +59,124 @@ const parseAgentResponse = (text: string): ParsedAgentResponse => {
   };
 };
 
+const generateSystemPrompt = (curriculum: CurriculumWeek[]) => {
+  // Serialize curriculum for the prompt
+  const curriculumMap = curriculum.map(c => 
+    `${c.id.toUpperCase()} – ${c.title}\n${c.topics.map(t => `• ${t}`).join('\n')}`
+  ).join('\n\n');
+
+  return `
+You are an AUTONOMOUS ADAPTIVE LEARNING AGENT for an undergraduate mathematics curriculum.
+You operate inside an external control loop that persists learner state, executes your decisions, and feeds updated memory back to you.
+
+========================
+DYNAMIC CURRICULUM MAP
+========================
+${curriculumMap}
+
+========================
+AUTONOMOUS OPERATING RULES
+========================
+
+You must operate through these internal roles:
+• Planner – selects next concept based on learner state, not week number
+• Teacher – explains using intuition, formalism, and visual reasoning
+• Assessor – generates diagnostic, prediction-based questions
+• Diagnostician – classifies misconceptions
+• Verifier – checks mathematical and logical consistency
+• Memory Manager – proposes structured learner state updates
+
+You are NOT required to follow weeks linearly.
+Weeks define scope, not order.
+
+========================
+MANDATORY OUTPUT FORMAT
+========================
+
+You MUST respond with these 6 sections in this EXACT order. Use the headers exactly as written.
+
+1. DECISION_RATIONALE
+(Explain why you are taking this action based on the learner's state)
+
+2. ACTION
+(One word only: TEACH | ASSESS | RETEACH | REVIEW | ADVANCE)
+
+3. CONTENT
+(The actual message to the learner. Use clear, engaging Markdown. 
+IMPORTANT: Use LaTeX for ALL mathematical expressions ($...$ for inline, $$...$$ for block).
+IMPORTANT: Use VISUALIZATIONS whenever possible:
+
+A) MERMAID DIAGRAMS (for graphs, flows, trees):
+   Wrap in a code block with language "mermaid".
+   Example:
+   \`\`\`mermaid
+   graph TD;
+     A-->B;
+   \`\`\`
+
+B) FUNCTION PLOTS (for 2D Calculus/Algebra graphs):
+   Wrap a valid JSON object in a code block with language "plot".
+   The JSON must follow 'function-plot' options.
+   Example:
+   \`\`\`plot
+   {
+     "xAxis": {"domain": [-5, 5]},
+     "yAxis": {"domain": [-5, 5]},
+     "grid": true,
+     "data": [
+       {"fn": "x^2", "color": "red"}
+     ]
+   }
+   \`\`\`
+)
+
+4. VERIFICATION
+(Double check your own math and logic here)
+
+5. MEMORY_UPDATE
+(A valid JSON object representing the NEW learner state. Do not use Markdown code blocks for this section, just raw JSON.
+The JSON must match this interface:
+{
+  "currentWeek": "string (e.g., Week 1)",
+  "focusTopic": "string",
+  "masteryLevels": { "Week 1": number (0-100), ... "Week 11": number },
+  "misconceptions": ["string"],
+  "lastAction": "string",
+  "historySummary": "brief summary of interaction"
+})
+
+6. NEXT_INTENT
+(What you plan to do in the next turn)
+
+========================
+ADAPTATION CONSTRAINTS
+========================
+
+• Never assume mastery
+• Never advance without assessment
+• Revisit earlier weeks if prerequisites fail
+• Prefer prediction, visualization, and reasoning
+• Algorithmic topics must include step-by-step simulation
+
+========================
+INITIAL DIRECTIVE
+========================
+
+If the learner history is empty, begin by ASSESSING foundational understanding relevant to:
+• Week 1 (relations vs functions)
+• Week 2 (graph interpretation)
+• Week 10 (algorithmic intuition)
+
+Assume no prior mastery.
+`;
+};
+
 export const sendMessageToAgent = async (
   userMessage: string, 
   currentState: LearnerState,
   chatHistory: Array<{role: 'user' | 'model', parts: {text?: string, inlineData?: any}[]}> = [],
-  imageBase64?: string
+  imageBase64?: string,
+  curriculum?: CurriculumWeek[] // Added dynamic curriculum
 ): Promise<ParsedAgentResponse> => {
   
   // Ensure Key Check
@@ -74,7 +186,7 @@ export const sendMessageToAgent = async (
 
   try {
     const ai = getAiClient();
-    const model = 'gemini-3-flash-preview'; // Optimal for reasoning tasks
+    const model = 'gemini-3-flash-preview'; 
 
     // Construct the full context including the hidden state
     const stateContext = `
@@ -89,22 +201,31 @@ ${JSON.stringify(currentState, null, 2)}
     // Prepare current user parts
     const currentUserParts: any[] = [{ text: finalPrompt }];
 
-    // Attach image if present
+    // Attach image/file if present
     if (imageBase64) {
-      // Strip metadata header if present (e.g. "data:image/png;base64,")
+      // Extract mime type if available (e.g., "data:image/jpeg;base64,...")
+      const mimeMatch = imageBase64.match(/^data:(.*?);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+      
       const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+      
       currentUserParts.unshift({
         inlineData: {
-          mimeType: 'image/png',
+          mimeType: mimeType,
           data: cleanBase64
         }
       });
     }
+    
+    // Default to the imported static curriculum if none passed, but this file shouldn't import it directly if avoiding circular deps.
+    // However, for safety, if undefined, we assume the caller handles it or we'll have issues.
+    // In App.tsx we will pass it.
+    const dynamicSystemPrompt = curriculum ? generateSystemPrompt(curriculum) : generateSystemPrompt([]); 
 
     const result = await ai.models.generateContent({
       model,
       config: {
-        systemInstruction: SYSTEM_PROMPT,
+        systemInstruction: dynamicSystemPrompt,
         temperature: 0.2,
       },
       contents: [

@@ -1,25 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LearnerState, Message, ParsedAgentResponse } from './types';
+import { LearnerState, Message, ParsedAgentResponse, CurriculumWeek } from './types';
 import { INITIAL_LEARNER_STATE, CURRICULUM_DATA } from './constants';
 import { sendMessageToAgent } from './services/geminiService';
+import { analyzeCurriculumIntent } from './services/routingService';
 import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
 import CourseCard from './components/CourseCard';
 import WeekTimeline from './components/WeekTimeline';
 import TopicSidebar from './components/TopicSidebar';
-import { Menu, X, ArrowLeft, GraduationCap } from 'lucide-react';
+import { Menu, X, ArrowLeft, GraduationCap, Sparkles } from 'lucide-react';
 
 type ViewMode = 'HOME' | 'COURSE';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>('HOME');
+  
+  // Dynamic Curriculum State
+  const [curriculum, setCurriculum] = useState<CurriculumWeek[]>(CURRICULUM_DATA);
+  
   const [learnerState, setLearnerState] = useState<LearnerState>(INITIAL_LEARNER_STATE);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRouting, setIsRouting] = useState(false); // New state for router feedback
   const [lastAgentResponse, setLastAgentResponse] = useState<ParsedAgentResponse | null>(null);
   
   // Mobile/Layout State
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Controls Right Sidebar (Dashboard) on mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [selectedWeekId, setSelectedWeekId] = useState<string>(INITIAL_LEARNER_STATE.currentWeek);
   
   const [hasStarted, setHasStarted] = useState(false);
@@ -31,7 +37,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await sendMessageToAgent('', learnerState, []);
+      const response = await sendMessageToAgent('', learnerState, [], undefined, curriculum);
       
       const newMsg: Message = {
         id: Date.now().toString(),
@@ -64,7 +70,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [hasStarted, learnerState]);
+  }, [hasStarted, learnerState, curriculum]);
 
   // Auto-start on mount (background)
   useEffect(() => {
@@ -83,13 +89,69 @@ const App: React.FC = () => {
 
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
+    setIsRouting(true); // Show routing indicator
+
+    let currentWeekOverride: string | undefined;
+    let updatedCurriculum = [...curriculum];
 
     try {
+      // 1. RUN NAVIGATOR AGENT
+      // We run this first to see if we need to jump weeks or add content BEFORE the teacher speaks.
+      // This allows the teacher to know the *new* context immediately.
+      
+      // Don't route if it's very short (e.g. "ok", "yes") to save API calls, 
+      // unless image is present (image might contain a whole math problem)
+      if (text.length > 5 || image) {
+        console.log("Analyzing curriculum intent...");
+        const routeResult = await analyzeCurriculumIntent(text, curriculum, image);
+        console.log("Router decision:", routeResult);
+
+        if (routeResult.action === 'NAVIGATE' && routeResult.targetWeekId) {
+             // If navigating to a different week, update selection
+             if (routeResult.targetWeekId !== selectedWeekId) {
+                 setSelectedWeekId(routeResult.targetWeekId);
+                 currentWeekOverride = routeResult.targetWeekId;
+                 
+                 // Add a small system note to chat so user knows we moved
+                 setMessages(prev => [...prev, {
+                     id: Date.now().toString(),
+                     role: 'system',
+                     content: `Switched context to **${routeResult.targetWeekId}**.`,
+                     timestamp: Date.now()
+                 }]);
+             }
+        } else if (routeResult.action === 'ADD_MODULE' && routeResult.newModule) {
+            // Add new module to curriculum
+            updatedCurriculum = [...curriculum, routeResult.newModule];
+            setCurriculum(updatedCurriculum);
+            setSelectedWeekId(routeResult.newModule.id);
+            currentWeekOverride = routeResult.newModule.id;
+            
+            setMessages(prev => [...prev, {
+                 id: Date.now().toString(),
+                 role: 'system',
+                 content: `Added new module: **${routeResult.newModule.title}**.`,
+                 timestamp: Date.now()
+            }]);
+            
+            // Initialize mastery for new module
+            setLearnerState(prev => ({
+                ...prev,
+                masteryLevels: {
+                    ...prev.masteryLevels,
+                    [routeResult.newModule!.id]: 0
+                }
+            }));
+        }
+      }
+
+      setIsRouting(false); // Routing done
+
+      // 2. RUN TEACHER AGENT
       // Build history for API
       const apiHistory = messages.map(m => {
         const parts: any[] = [{ text: m.role === 'agent' ? (m.metadata?.raw || m.content) : m.content }];
         
-        // If message has image, add it to history as well so model remembers context
         if (m.image) {
             const cleanBase64 = m.image.split(',')[1] || m.image;
             parts.unshift({
@@ -106,7 +168,14 @@ const App: React.FC = () => {
         };
       });
       
-      const response = await sendMessageToAgent(text, learnerState, apiHistory, image);
+      // Update local state for the Teacher's context if we routed
+      const contextState = {
+          ...learnerState,
+          currentWeek: currentWeekOverride || learnerState.currentWeek
+      };
+
+      // Pass the UPDATED curriculum to the teacher
+      const response = await sendMessageToAgent(text, contextState, apiHistory, image, updatedCurriculum);
 
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -121,7 +190,7 @@ const App: React.FC = () => {
 
       if (response.memoryUpdate) {
         setLearnerState(prev => ({ ...prev, ...response.memoryUpdate }));
-        // If agent changes week, optionally snap to it
+        // If agent changes week logic again, respect it (Teacher overrides Navigator)
         if (response.memoryUpdate.currentWeek && response.memoryUpdate.currentWeek !== selectedWeekId) {
              setSelectedWeekId(response.memoryUpdate.currentWeek);
         }
@@ -140,6 +209,7 @@ const App: React.FC = () => {
       ]);
     } finally {
       setIsLoading(false);
+      setIsRouting(false);
     }
   };
 
@@ -150,7 +220,7 @@ const App: React.FC = () => {
   };
 
   // Calculate overall progress for Home Card
-  const overallProgress = Object.values(learnerState.masteryLevels).reduce((a, b) => a + (b as number), 0) / 11;
+  const overallProgress = Object.values(learnerState.masteryLevels).reduce((a: number, b: number) => a + b, 0) / curriculum.length;
 
   // --- VIEW: HOME PAGE ---
   if (view === 'HOME') {
@@ -186,7 +256,7 @@ const App: React.FC = () => {
            />
            
            <div className="text-slate-600 text-xs font-mono uppercase tracking-widest mt-8">
-               v1.0.4 • Powered by Gemini 2.0 Flash
+               v1.1.0 • Powered by Gemini 2.0 Flash (Multi-Agent System)
            </div>
         </div>
       </div>
@@ -215,6 +285,12 @@ const App: React.FC = () => {
                 <div>
                     <h1 className="font-bold text-slate-100 text-sm md:text-base leading-none">Mathematics I</h1>
                 </div>
+                {isRouting && (
+                   <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-900/30 border border-indigo-500/30 text-indigo-400 text-xs animate-pulse">
+                      <Sparkles size={12} />
+                      <span>Navigator Active</span>
+                   </div>
+                )}
             </div>
             
             <button 
@@ -231,6 +307,7 @@ const App: React.FC = () => {
                 currentWeekId={selectedWeekId} 
                 masteryLevels={learnerState.masteryLevels}
                 onSelectWeek={setSelectedWeekId}
+                curriculum={curriculum} 
               />
           </div>
       </div>
@@ -244,6 +321,7 @@ const App: React.FC = () => {
                 currentWeekId={selectedWeekId} 
                 focusTopic={learnerState.focusTopic}
                 onTopicClick={handleTopicClick}
+                curriculum={curriculum}
              />
         </div>
 

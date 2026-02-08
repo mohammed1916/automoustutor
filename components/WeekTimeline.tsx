@@ -1,29 +1,32 @@
 import React, { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Lock, ChevronRight } from 'lucide-react';
-import { CURRICULUM_DATA } from '../constants';
+import { Check, Lock } from 'lucide-react';
+import { CurriculumWeek } from '../types';
 
 interface WeekTimelineProps {
   currentWeekId: string;
   masteryLevels: Record<string, number>;
   onSelectWeek: (weekId: string) => void;
+  curriculum: CurriculumWeek[];
 }
 
-const WeekTimeline: React.FC<WeekTimelineProps> = ({ currentWeekId, masteryLevels, onSelectWeek }) => {
+const WeekTimeline: React.FC<WeekTimelineProps> = ({ currentWeekId, masteryLevels, onSelectWeek, curriculum }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Find index to determine progress filling
-  const currentIndex = CURRICULUM_DATA.findIndex(w => w.id === currentWeekId);
+  const currentIndex = curriculum.findIndex(w => w.id === currentWeekId);
   
   // Auto-scroll to selected week on change
   useEffect(() => {
     if (scrollContainerRef.current) {
-        const selectedNode = scrollContainerRef.current.children[0].children[currentIndex] as HTMLElement;
-        if (selectedNode) {
+        // Safety check for children access
+        const wrapper = scrollContainerRef.current.children[0];
+        if (wrapper && wrapper.children[currentIndex]) {
+            const selectedNode = wrapper.children[currentIndex] as HTMLElement;
             selectedNode.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         }
     }
-  }, [currentIndex]);
+  }, [currentIndex, curriculum.length]);
 
   return (
     <div className="w-full bg-slate-950/50 backdrop-blur-sm border-t border-slate-800/50 py-3 relative">
@@ -38,11 +41,23 @@ const WeekTimeline: React.FC<WeekTimelineProps> = ({ currentWeekId, masteryLevel
             
             {/* Active Progress Line Fill (Simulated by coloring segments) */}
 
-          {CURRICULUM_DATA.map((week, index) => {
-            const isCompleted = masteryLevels[week.id] > 80;
+          {curriculum.map((week, index) => {
+            const mastery = masteryLevels[week.id] || 0;
+            const isCompleted = mastery > 80;
             const isCurrent = week.id === currentWeekId;
-            const isUnlocked = index <= currentIndex || isCompleted || (index > 0 && masteryLevels[CURRICULUM_DATA[index-1].id] > 80);
             
+            // Logic for unlocking:
+            // 1. First week is always unlocked.
+            // 2. If it's "Extra", it's unlocked if it was dynamically added.
+            // 3. Otherwise, check previous week.
+            let isUnlocked = false;
+            if (index === 0) isUnlocked = true;
+            else if (mastery > 0) isUnlocked = true; // If we have ANY progress (e.g. jumped here), unlock it
+            else if (index > 0 && (masteryLevels[curriculum[index-1].id] || 0) > 80) isUnlocked = true;
+            
+            // If current, obviously unlocked
+            if (isCurrent) isUnlocked = true;
+
             // Determine connector color to the NEXT node
             const isLineActive = index < currentIndex;
 
@@ -50,7 +65,7 @@ const WeekTimeline: React.FC<WeekTimelineProps> = ({ currentWeekId, masteryLevel
               <div key={week.id} className="group relative flex flex-col items-center min-w-[100px] cursor-pointer" onClick={() => onSelectWeek(week.id)}>
                 
                 {/* Connecting Line (Right side of node) */}
-                {index < CURRICULUM_DATA.length - 1 && (
+                {index < curriculum.length - 1 && (
                     <div className="absolute top-[15px] left-[50%] w-full h-0.5 -z-10">
                         <motion.div 
                             initial={false}
@@ -94,7 +109,7 @@ const WeekTimeline: React.FC<WeekTimelineProps> = ({ currentWeekId, masteryLevel
                             ? 'text-emerald-500' 
                             : 'text-slate-500 group-hover:text-slate-300'}
                 `}>
-                  <span className="block truncate max-w-[80px]">{week.id}</span>
+                  <span className="block truncate max-w-[80px]" title={week.id}>{week.id}</span>
                 </div>
               </div>
             );

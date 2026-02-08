@@ -35,3 +35,10 @@ export enum AgentAction {
   ADVANCE = 'ADVANCE',
   UNKNOWN = 'UNKNOWN'
 }
+
+export interface CurriculumWeek {
+  id: string;
+  title: string;
+  description: string;
+  topics: string[];
+}
