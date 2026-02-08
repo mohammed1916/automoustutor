@@ -12,6 +12,7 @@ const MobileConnectView: React.FC<MobileConnectViewProps> = ({ desktopPeerId }) 
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<Peer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const connRef = useRef<any>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -33,6 +34,19 @@ const MobileConnectView: React.FC<MobileConnectViewProps> = ({ desktopPeerId }) 
 
         peer.on('open', (id) => {
           setStatus('connecting');
+
+          // Open control channel
+          const conn = peer.connect(desktopPeerId);
+          connRef.current = conn;
+
+          conn.on('open', () => {
+            console.log('Control channel open (mobile → desktop)');
+          });
+
+          conn.on('error', (e) => {
+            console.error('Control channel error', e);
+          });
+
           connectToDesktop(peer, stream);
         });
 
@@ -53,6 +67,7 @@ const MobileConnectView: React.FC<MobileConnectViewProps> = ({ desktopPeerId }) 
 
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
+      connRef.current?.close();
       peerRef.current?.destroy();
     };
   }, [desktopPeerId]);
@@ -60,6 +75,16 @@ const MobileConnectView: React.FC<MobileConnectViewProps> = ({ desktopPeerId }) 
   const connectToDesktop = (peer: Peer, stream: MediaStream) => {
     try {
       const call = peer.call(desktopPeerId, stream);
+
+      // Notify desktop that streaming started
+      if (connRef.current?.open) {
+        connRef.current.send('STREAM_STARTED');
+      } else {
+        connRef.current?.on('open', () => {
+          connRef.current?.send('STREAM_STARTED');
+        });
+      }
+
       
       call.on('close', () => {
         setStatus('error');

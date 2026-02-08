@@ -40,6 +40,8 @@ const App: React.FC = () => {
   
   const [hasStarted, setHasStarted] = useState(false);
 
+  const [isMobileStreaming, setIsMobileStreaming] = useState(false);
+
   // WebRTC / Mobile Connection State
   const [mobileConnectId, setMobileConnectId] = useState<string | null>(null);
   const [desktopPeerId, setDesktopPeerId] = useState<string>('');
@@ -94,27 +96,64 @@ const App: React.FC = () => {
   useEffect(() => {
     // Only init peer if we are not in mobile mode
     if (view !== 'MOBILE_CONNECT' && !peerRef.current) {
-       const id = 'math-agent-' + crypto.randomUUID();
-       const peer = new Peer(id);
-       
-       peer.on('open', (id) => {
-          console.log('My Peer JS ID is: ' + id);
-          setDesktopPeerId(id);
-       });
 
-       peer.on('call', (call) => {
-          console.log('Receiving call...');
-          call.answer(); // Answer without sending a stream back (one-way)
-          
-          call.on('stream', (stream) => {
-             console.log('Received remote stream');
-             setRemoteStream(stream);
-             setShowQrModal(false); // Close QR modal on connection
-          });
-       });
+      const id = 'math-agent-' + crypto.randomUUID();
+      const peer = new Peer(id);
 
-       peerRef.current = peer;
+      // ---- Peer Ready ----
+      peer.on('open', (id) => {
+        console.log('My Peer JS ID is:', id);
+        setDesktopPeerId(id);
+      });
+
+      // ---- Control Channel (Status) ----
+      peer.on('connection', (conn) => {
+        console.log('Control channel connected');
+
+        conn.on('data', (data) => {
+          console.log('Control message:', data);
+
+          if (data === 'STREAM_STARTED') {
+            console.log('Mobile stream started (signal)');
+            setIsMobileStreaming(true); // UPDATE STATE
+          }
+        });
+
+        conn.on('close', () => {
+          console.log('Control channel closed');
+          setIsMobileStreaming(false);
+        });
+      });
+
+      // ---- Media Channel (Video) ----
+      peer.on('call', (call) => {
+        console.log('Receiving media call...');
+
+        call.answer(); // one-way (mobile → desktop)
+
+        call.on('stream', (stream) => {
+          console.log('Received remote stream');
+
+          setRemoteStream(stream);
+          setIsMobileStreaming(true); // BACKUP SIGNAL
+          setShowQrModal(false);
+        });
+
+        call.on('close', () => {
+          console.log('Call closed');
+          setRemoteStream(null);
+          setIsMobileStreaming(false);
+        });
+      });
+
+      // ---- Error Handling ----
+      peer.on('error', (err) => {
+        console.error('PeerJS error:', err);
+      });
+
+      peerRef.current = peer;
     }
+
   }, [view]);
 
 
@@ -438,7 +477,7 @@ const App: React.FC = () => {
                   className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${remoteStream ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/50' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}
                 >
                   <Smartphone size={16} />
-                  <span>{remoteStream ? 'Mobile Connected' : 'Connect Mobile'}</span>
+                  <span>{isMobileStreaming ? 'Mobile Streaming' : 'Connect Mobile'}</span>
                 </button>
 
                 {user ? (
