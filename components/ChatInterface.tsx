@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
-import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Square, Video } from 'lucide-react';
+import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Square, Video, Smartphone } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -14,9 +14,10 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   onSendMessage: (text: string, attachment?: string) => void;
   onStartSession?: () => void;
+  remoteStream?: MediaStream | null;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onStartSession }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onStartSession, remoteStream }) => {
   const [inputValue, setInputValue] = useState('');
   const [showDrawingPad, setShowDrawingPad] = useState(false);
   
@@ -32,6 +33,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [useRemoteCamera, setUseRemoteCamera] = useState(false);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,10 +64,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
   // Handle video stream assignment
   useEffect(() => {
-    if (showCamera && videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
+    if (showCamera && videoRef.current) {
+        if (useRemoteCamera && remoteStream) {
+            videoRef.current.srcObject = remoteStream;
+        } else if (cameraStream) {
+            videoRef.current.srcObject = cameraStream;
+        }
     }
-  }, [showCamera, cameraStream]);
+  }, [showCamera, cameraStream, remoteStream, useRemoteCamera]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +91,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   const processFile = (file: File) => {
     if (!file) return;
 
-    // Check for 20MB limit (Gemini API limitation for inlineData in browser)
     if (file.size > 20 * 1024 * 1024) {
         alert("File size exceeds 20MB limit for direct uploads. Please upload a shorter clip or compress the video.");
         return;
@@ -152,7 +157,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         };
         reader.readAsDataURL(audioBlob);
         
-        // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -188,39 +192,46 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
   // --- CAMERA & VIDEO RECORDING ---
   const startCamera = async () => {
+      if (remoteStream && !useRemoteCamera) {
+          // If remote is available, default to it? Or ask?
+          // For now, let's just initialize local if not explicitly switched
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          alert("Camera access is not supported in this browser.");
-          return;
-      }
-
-      try {
-          // Construct constraints for video recording
-          const constraints: MediaStreamConstraints = {
-              video: { facingMode: 'environment' },
-              audio: true
-          };
-
-          let stream;
-          try {
-              // Try environment (rear) camera first
-              stream = await navigator.mediaDevices.getUserMedia(constraints);
-          } catch (err) {
-              // Fallback to basic constraints
-              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          if (!remoteStream) {
+             alert("Camera access is not supported in this browser.");
+             return;
           }
-          
-          setCameraStream(stream);
-          setShowCamera(true);
-      } catch (err) {
-         console.error("Error accessing camera:", err);
-         alert("Could not access camera. Please ensure a camera is connected and permissions are granted.");
       }
+
+      if (!useRemoteCamera) {
+        try {
+            const constraints: MediaStreamConstraints = {
+                video: { facingMode: 'environment' },
+                audio: true
+            };
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            }
+            setCameraStream(stream);
+        } catch (err) {
+            console.error("Error accessing local camera:", err);
+            if (!remoteStream) {
+               alert("Could not access local camera.");
+               return;
+            }
+        }
+      }
+      
+      setShowCamera(true);
   };
 
   const stopCameraStream = () => {
-      // If we are recording video and user closes, we cancel the recording (do not save)
       if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
-          videoRecorderRef.current.onstop = null; // Remove handler to prevent saving
+          videoRecorderRef.current.onstop = null;
           videoRecorderRef.current.stop();
       }
       setIsRecordingVideo(false);
@@ -233,10 +244,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   };
 
   const startVideoRecording = () => {
-      if (!cameraStream) return;
+      const activeStream = useRemoteCamera ? remoteStream : cameraStream;
+      if (!activeStream) return;
       
       try {
-          const mediaRecorder = new MediaRecorder(cameraStream);
+          // Note: If remote stream has no audio, recording might lack audio unless we mix it in.
+          // For simplicity, we record whatever tracks are on the stream.
+          const mediaRecorder = new MediaRecorder(activeStream);
           videoRecorderRef.current = mediaRecorder;
           videoChunksRef.current = [];
 
@@ -253,14 +267,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                   setPendingAttachment(reader.result as string);
               };
               reader.readAsDataURL(blob);
-              stopCameraStream(); // Clean exit after save
+              stopCameraStream(); 
           };
 
           mediaRecorder.start();
           setIsRecordingVideo(true);
       } catch (e) {
           console.error("Failed to start video recorder", e);
-          alert("Failed to start video recording.");
+          alert("Failed to start video recording. Stream might be incompatible.");
       }
   };
 
@@ -268,6 +282,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
       if (videoRecorderRef.current && isRecordingVideo) {
           videoRecorderRef.current.stop();
           setIsRecordingVideo(false);
+      }
+  };
+  
+  const takeSnapshot = () => {
+      if (videoRef.current) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+              ctx.drawImage(videoRef.current, 0, 0);
+              const dataUrl = canvas.toDataURL('image/jpeg');
+              setPendingAttachment(dataUrl);
+              stopCameraStream();
+          }
       }
   };
 
@@ -345,7 +374,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                     playsInline 
                     className="max-w-full max-h-full object-contain"
                     onLoadedMetadata={() => videoRef.current?.play()}
-                    muted={true} // Mute feedback loop during recording
+                    muted={useRemoteCamera} // Mute remote to prevent echo if both active
                   />
                   {isRecordingVideo && (
                     <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-900/80 px-3 py-1 rounded-full animate-pulse">
@@ -353,13 +382,41 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                         <span className="text-xs font-bold text-white">REC</span>
                     </div>
                   )}
+                  
+                  {/* Camera Source Switcher */}
+                  {remoteStream && (
+                      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur rounded-full p-1 flex items-center border border-slate-700">
+                          <button 
+                             onClick={() => setUseRemoteCamera(false)}
+                             className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${!useRemoteCamera ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                          >
+                              Local
+                          </button>
+                          <button 
+                             onClick={() => setUseRemoteCamera(true)}
+                             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${useRemoteCamera ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                          >
+                              <Smartphone size={12} />
+                              Mobile
+                          </button>
+                      </div>
+                  )}
+
                   <div className="absolute top-4 right-4">
                       <button onClick={stopCameraStream} className="p-2 bg-black/50 rounded-full text-white hover:bg-black/70">
                           <X size={24} />
                       </button>
                   </div>
               </div>
+              
               <div className="h-24 bg-slate-900 flex items-center justify-center gap-8">
+                  {/* Snapshot Button (Always available) */}
+                  {!isRecordingVideo && (
+                      <button onClick={takeSnapshot} className="w-12 h-12 rounded-full border-2 border-white bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all" title="Take Snapshot">
+                          <div className="w-10 h-10 rounded-full bg-white" />
+                      </button>
+                  )}
+
                   {isRecordingVideo ? (
                       <button onClick={stopVideoRecording} className="w-16 h-16 rounded-full border-4 border-red-500 bg-red-500 flex items-center justify-center hover:scale-105 transition-all shadow-[0_0_20px_rgba(239,68,68,0.5)]" title="Stop Recording">
                           <Square size={24} fill="currentColor" className="text-white" />
@@ -579,7 +636,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                    className={`p-2 rounded-lg transition-colors ${useRemoteCamera && remoteStream ? 'text-emerald-400 bg-emerald-900/30' : 'text-slate-400 hover:text-red-400 hover:bg-slate-700'}`}
                                     title="Record Video Clip"
                                     disabled={isLoading}
                                 >

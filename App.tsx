@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LearnerState, Message, ParsedAgentResponse, CurriculumWeek } from './types';
 import { INITIAL_LEARNER_STATE, CURRICULUM_DATA } from './constants';
 import { sendMessageToAgent } from './services/geminiService';
@@ -10,9 +10,11 @@ import CourseCard from './components/CourseCard';
 import WeekTimeline from './components/WeekTimeline';
 import TopicSidebar from './components/TopicSidebar';
 import AuthModal from './components/AuthModal';
+import MobileConnectView from './components/MobileConnectView';
 import { Menu, X, ArrowLeft, GraduationCap, Sparkles, Smartphone, QrCode, Link as LinkIcon, Check, LogOut, User as UserIcon, LogIn } from 'lucide-react';
+import { Peer } from 'peerjs';
 
-type ViewMode = 'HOME' | 'COURSE';
+type ViewMode = 'HOME' | 'COURSE' | 'MOBILE_CONNECT';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>('HOME');
@@ -38,12 +40,25 @@ const App: React.FC = () => {
   
   const [hasStarted, setHasStarted] = useState(false);
 
+  // WebRTC / Mobile Connection State
+  const [mobileConnectId, setMobileConnectId] = useState<string | null>(null);
+  const [desktopPeerId, setDesktopPeerId] = useState<string>('');
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const peerRef = useRef<Peer | null>(null);
+
   // --- INITIALIZATION & AUTH CHECK ---
   useEffect(() => {
-    // 1. Check for Sync Data (Mobile URL)
+    // 1. Check for Mobile Connect Param
     const params = new URLSearchParams(window.location.search);
+    const mobileConnect = params.get('mobileConnect');
+    if (mobileConnect) {
+      setMobileConnectId(mobileConnect);
+      setView('MOBILE_CONNECT');
+      return;
+    }
+
+    // 2. Check for Sync Data (Mobile URL legacy)
     const syncData = params.get('sync');
-    
     if (syncData) {
         try {
             const decoded = decodeURIComponent(atob(syncData));
@@ -52,16 +67,13 @@ const App: React.FC = () => {
             if (syncedState.currentWeek) {
                 setSelectedWeekId(syncedState.currentWeek);
             }
-            // If synced, we are essentially "Guests" with data until we sign in
-            // Clean URL
             window.history.replaceState({}, '', window.location.pathname);
             setView('COURSE');
-            // Manual start required now or handled by saved state
         } catch (e) {
             console.error("Sync failed", e);
         }
     } else {
-        // 2. Check for Local Storage Session
+        // 3. Check for Local Storage Session
         const session = getSession();
         if (session) {
             setUser(session);
@@ -72,19 +84,46 @@ const App: React.FC = () => {
                 if (progress.state.currentWeek) {
                     setSelectedWeekId(progress.state.currentWeek);
                 }
-                // If we have saved data, we are 'started'
                 if (progress.messages.length > 0) setHasStarted(true);
             }
         }
     }
   }, []);
 
+  // --- PEERJS INIT (DESKTOP) ---
+  useEffect(() => {
+    // Only init peer if we are not in mobile mode
+    if (view !== 'MOBILE_CONNECT' && !peerRef.current) {
+       const id = 'math-agent-' + crypto.randomUUID();
+       const peer = new Peer(id);
+       
+       peer.on('open', (id) => {
+          console.log('My Peer JS ID is: ' + id);
+          setDesktopPeerId(id);
+       });
+
+       peer.on('call', (call) => {
+          console.log('Receiving call...');
+          call.answer(); // Answer without sending a stream back (one-way)
+          
+          call.on('stream', (stream) => {
+             console.log('Received remote stream');
+             setRemoteStream(stream);
+             setShowQrModal(false); // Close QR modal on connection
+          });
+       });
+
+       peerRef.current = peer;
+    }
+  }, [view]);
+
+
   // --- SAVE ON UPDATE ---
   useEffect(() => {
-    if (user && hasStarted) {
+    if (user && hasStarted && view !== 'MOBILE_CONNECT') {
         saveProgress(user.id, learnerState, messages);
     }
-  }, [user, learnerState, messages, hasStarted]);
+  }, [user, learnerState, messages, hasStarted, view]);
 
   // --- AGENT SESSION START ---
   const startSession = useCallback(async () => {
@@ -93,7 +132,6 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Don't send initial message if we restored messages from history
       if (messages.length > 0) {
           setIsLoading(false);
           return;
@@ -142,7 +180,6 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
       setUser(loggedInUser);
-      // Load their specific data
       const progress = loadProgress(loggedInUser.id);
       if (progress) {
           setLearnerState(progress.state);
@@ -151,8 +188,6 @@ const App: React.FC = () => {
           setHasStarted(true);
           setView('COURSE');
       } else {
-          // New user, reset or keep guest state? 
-          // Strategy: Keep current guest state and associate it with new user (Migration)
           saveProgress(loggedInUser.id, learnerState, messages);
       }
   };
@@ -161,7 +196,6 @@ const App: React.FC = () => {
       logout();
       setUser(null);
       setView('HOME');
-      // Optional: Clear state to initial
       setLearnerState(INITIAL_LEARNER_STATE);
       setMessages([]);
       setHasStarted(false);
@@ -186,7 +220,6 @@ const App: React.FC = () => {
     let updatedCurriculum = [...curriculum];
 
     try {
-      // 1. RUN NAVIGATOR AGENT
       if (text.length > 5 || attachment) {
         const routeResult = await analyzeCurriculumIntent(text, curriculum, attachment);
         if (routeResult.action === 'NAVIGATE' && routeResult.targetWeekId) {
@@ -225,7 +258,6 @@ const App: React.FC = () => {
 
       setIsRouting(false);
 
-      // 2. RUN TEACHER AGENT
       const apiHistory = messages.map(m => {
         const parts: any[] = [{ text: m.role === 'agent' ? (m.metadata?.raw || m.content) : m.content }];
         if (m.attachment) {
@@ -279,20 +311,20 @@ const App: React.FC = () => {
       handleSendMessage(`I want to focus on the subconcept "${topic}" in ${selectedWeekId}.`);
   };
 
-  const getSyncUrl = () => {
-      try {
-          const stateString = JSON.stringify(learnerState);
-          const encoded = btoa(encodeURIComponent(stateString));
-          const url = new URL(window.location.href);
-          url.searchParams.set('sync', encoded);
-          return url.toString();
-      } catch (e) {
-          return window.location.href;
-      }
+  // Robust URL generation for production
+  const getMobileConnectUrl = () => {
+      // Use origin and pathname to ensure a clean, absolute URL
+      // This avoids blob: URLs if window.location is standard, and removes query params
+        const url = new URL(window.location.href);
+        // Remove old params
+        url.search = "";
+        // Add pairing param
+        url.searchParams.set("mobileConnect", desktopPeerId);
+        return url.toString();
   };
 
   const copyToClipboard = () => {
-      navigator.clipboard.writeText(getSyncUrl());
+      navigator.clipboard.writeText(getMobileConnectUrl());
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
   };
@@ -300,6 +332,10 @@ const App: React.FC = () => {
   const overallProgress = (Object.values(learnerState.masteryLevels) as number[]).reduce((a, b) => a + b, 0) / (curriculum.length || 1);
 
   // --- RENDER ---
+  if (view === 'MOBILE_CONNECT' && mobileConnectId) {
+    return <MobileConnectView desktopPeerId={mobileConnectId} />;
+  }
+
   return (
     <>
     <AuthModal 
@@ -310,7 +346,6 @@ const App: React.FC = () => {
 
     {view === 'HOME' ? (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-        {/* Auth Button Top Right */}
         <div className="absolute top-6 right-6 z-20">
             {user ? (
                  <div className="flex items-center gap-4">
@@ -372,7 +407,6 @@ const App: React.FC = () => {
         </div>
       </div>
     ) : (
-      // --- COURSE INTERFACE ---
       <div className="flex flex-col h-screen bg-black overflow-hidden font-sans text-slate-200">
         <div className="flex flex-col bg-slate-950 border-b border-slate-900 z-30 shadow-md">
             <div className="h-14 flex items-center justify-between px-4 lg:px-6">
@@ -401,13 +435,12 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowQrModal(true)}
-                  className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-colors"
+                  className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${remoteStream ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/50' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}
                 >
                   <Smartphone size={16} />
-                  <span>Connect Mobile</span>
+                  <span>{remoteStream ? 'Mobile Connected' : 'Connect Mobile'}</span>
                 </button>
 
-                {/* User Status / Login in Course View */}
                 {user ? (
                     <div className="hidden md:flex items-center gap-2 px-2 py-1 bg-slate-900 rounded-full border border-slate-800">
                          <div className="w-5 h-5 rounded-full bg-cyan-900/50 flex items-center justify-center text-[10px] font-bold">
@@ -458,6 +491,7 @@ const App: React.FC = () => {
                   isLoading={isLoading} 
                   onSendMessage={handleSendMessage}
                   onStartSession={startSession}
+                  remoteStream={remoteStream}
                />
           </div>
 
@@ -469,7 +503,6 @@ const App: React.FC = () => {
               top-[130px] lg:top-0 h-[calc(100%-130px)] lg:h-full
           `}>
                <Dashboard state={learnerState} lastAgentResponse={lastAgentResponse} />
-               {/* Mobile Sign Out */}
                {isSidebarOpen && user && (
                    <div className="p-4 border-t border-slate-800 lg:hidden">
                        <button onClick={handleLogout} className="w-full py-2 bg-red-900/20 text-red-400 border border-red-900/50 rounded-lg flex items-center justify-center gap-2">
@@ -502,26 +535,40 @@ const App: React.FC = () => {
               </div>
               
               <h3 className="text-xl font-bold text-white mb-2">
-                  Sync to Mobile
+                  Sync Mobile Camera
               </h3>
               <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                Scan this to transfer your progress and history to your phone.
+                Scan with your phone to stream its camera to this session. No login required.
               </p>
               
-              <div className="bg-white p-4 rounded-xl mx-auto w-fit mb-6 shadow-lg">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getSyncUrl())}&color=000000`} 
-                  alt="Session QR Code" 
-                  className="w-48 h-48"
-                />
+              <div className="bg-white p-4 rounded-xl mx-auto w-fit mb-6 shadow-lg min-h-[200px] flex items-center justify-center">
+                {desktopPeerId ? (
+                    <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getMobileConnectUrl())}&color=000000`} 
+                    alt="Mobile Connect QR Code" 
+                    className="w-48 h-48"
+                    />
+                ) : (
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin" />
+                        <span className="text-xs text-slate-400">Initializing Connection...</span>
+                    </div>
+                )}
               </div>
+
+              {desktopPeerId && (
+                <div className="mb-4 p-2 bg-black/30 rounded border border-white/5 text-[10px] font-mono text-slate-500 break-all select-all">
+                    {getMobileConnectUrl()}
+                </div>
+              )}
               
               <button 
                   onClick={copyToClipboard}
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors font-medium text-sm"
+                  disabled={!desktopPeerId}
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                   {copySuccess ? <Check size={16} className="text-emerald-400" /> : <LinkIcon size={16} />}
-                  {copySuccess ? 'Copied to Clipboard' : 'Copy Sync Link'}
+                  {copySuccess ? 'Copied Link' : 'Copy Connect Link'}
               </button>
             </div>
           </div>
