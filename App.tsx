@@ -391,6 +391,7 @@ const App: React.FC = () => {
       <LiveSession 
         onClose={() => setIsLiveSessionOpen(false)} 
         onTransfer={() => setShowQrModal(true)}
+        remoteStream={remoteStream}
       />
     )}
 

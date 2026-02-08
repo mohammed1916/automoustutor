@@ -6,6 +6,7 @@ import { SYSTEM_PROMPT } from '../constants';
 interface LiveSessionProps {
   onClose: () => void;
   onTransfer: () => void;
+  remoteStream: MediaStream | null;
 }
 
 // --- Audio Helpers ---
@@ -48,7 +49,7 @@ declare global {
   }
 }
 
-const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
+const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteStream }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -58,6 +59,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
   
   // Camera facing mode state
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [useRemoteCamera, setUseRemoteCamera] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null); // For sending video frames
@@ -68,7 +70,10 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   
   // Stream & Session Refs
-  const streamRef = useRef<MediaStream | null>(null);
+  // We keep audio and video streams separate to allow mixing (e.g., Local Mic + Remote Video)
+  const localAudioStreamRef = useRef<MediaStream | null>(null);
+  const activeVideoStreamRef = useRef<MediaStream | null>(null); // Can be local or remote
+
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
   
   // Timing & Loops
@@ -88,6 +93,18 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
       cleanup();
     };
   }, []);
+
+  // Watch for remote stream changes
+  useEffect(() => {
+    if (useRemoteCamera && remoteStream && videoRef.current) {
+        activeVideoStreamRef.current = remoteStream;
+        videoRef.current.srcObject = remoteStream;
+        videoRef.current.play().catch(e => console.error("Remote play error", e));
+    } else if (!useRemoteCamera && activeVideoStreamRef.current && videoRef.current) {
+        // Ensure we revert to local if user toggles off
+        // This is handled by switchSource logic, but this safety check helps
+    }
+  }, [useRemoteCamera, remoteStream]);
 
   const initMediaPipe = async () => {
     if (window.Hands) {
@@ -110,7 +127,15 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
   const cleanup = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (audioProcessorRef.current) audioProcessorRef.current.disconnect();
-    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+    
+    // Stop local tracks
+    if (localAudioStreamRef.current) localAudioStreamRef.current.getTracks().forEach(track => track.stop());
+    
+    // Only stop video if it's local. Don't kill the remote stream as it belongs to App state
+    if (!useRemoteCamera && activeVideoStreamRef.current) {
+        activeVideoStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+
     if (inputAudioContextRef.current) inputAudioContextRef.current.close();
     if (outputAudioContextRef.current) outputAudioContextRef.current.close();
     if (handsRef.current) handsRef.current.close();
@@ -130,14 +155,18 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true, 
+      // 1. Get Audio (Always Local)
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localAudioStreamRef.current = audioStream;
+
+      // 2. Get Video (Default Local)
+      const videoStream = await navigator.mediaDevices.getUserMedia({ 
         video: { width: 640, height: 480, facingMode: facingMode } 
       });
-      streamRef.current = stream;
-      
+      activeVideoStreamRef.current = videoStream;
+
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = videoStream;
         videoRef.current.play();
       }
 
@@ -155,8 +184,8 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
           onopen: () => {
             console.log("Live Session Connected");
             setIsConnected(true);
-            startAudioStreaming(stream);
-            startProcessingLoop(); // Use requestAnimationFrame for Video + Hands
+            startAudioStreaming(audioStream); // Use local audio
+            startProcessingLoop(); // Loops over whatever video is active
           },
           onmessage: async (message: LiveServerMessage) => {
              // 1. Audio Output
@@ -269,10 +298,6 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
                 data: base64Data
             }
         });
-        
-        // Optional: Send a text cue that drawing is finished
-        // Note: Live API doesn't support explicit text msg in realtime, 
-        // but sending the image contextually after "Enter" is usually enough.
     });
   };
 
@@ -322,16 +347,10 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
         const video = videoRef.current;
         
         // 1. Send to MediaPipe
-        if (handsRef.current && video.readyState === 4) {
+        // Note: When remote stream is active, video.readyState is still valid
+        if (handsRef.current && video.readyState >= 2) {
              await handsRef.current.send({image: video});
         }
-
-        // 2. Stream to Gemini (Throttled roughly every 1s or so, or just let standard behavior work)
-        // Note: Sending every frame via Realtime API is too bandwidth heavy. 
-        // We will stick to sending keyframes or low FPS.
-        // For simplicity in this loop, we do it via a separate interval or counter.
-        // Here, we just rely on the 'Enter' key for the main drawing logic, 
-        // but we can send a low-res stream for context.
 
         animationFrameRef.current = requestAnimationFrame(loop);
     };
@@ -363,25 +382,55 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
         }
     }, 1000); 
 
-    // Store interval to clear later if needed, though we use `cleanup` which isn't holding this ref currently
-    // Ideally use a ref for this interval too.
     (window as any).streamIntervalId = streamInterval;
   };
 
   const switchCamera = async () => {
-    const newMode = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(newMode);
-    try {
-        if (streamRef.current) streamRef.current.getVideoTracks().forEach(t => t.stop());
-        const newStream = await navigator.mediaDevices.getUserMedia({
-             video: { facingMode: newMode, width: 640, height: 480 }
-        });
-        if (streamRef.current && videoRef.current) {
-             videoRef.current.srcObject = newStream;
-             videoRef.current.play();
+    // If we have a remote stream, we toggle between that and local
+    if (remoteStream) {
+        if (useRemoteCamera) {
+            // Switch back to local
+            setUseRemoteCamera(false);
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                     video: { facingMode: 'user', width: 640, height: 480 }
+                });
+                activeVideoStreamRef.current = newStream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = newStream;
+                    videoRef.current.play();
+                }
+            } catch (e) {
+                console.error("Error reverting to local camera", e);
+            }
+        } else {
+            // Switch to remote
+            setUseRemoteCamera(true);
+            activeVideoStreamRef.current = remoteStream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = remoteStream;
+                videoRef.current.play();
+            }
         }
-    } catch (e) {
-        console.error("Error switching camera:", e);
+    } else {
+        // Standard local switch (User <-> Env)
+        const newMode = facingMode === 'user' ? 'environment' : 'user';
+        setFacingMode(newMode);
+        try {
+            // Stop old local if it exists
+            if (activeVideoStreamRef.current) activeVideoStreamRef.current.getVideoTracks().forEach(t => t.stop());
+            
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                 video: { facingMode: newMode, width: 640, height: 480 }
+            });
+            activeVideoStreamRef.current = newStream;
+            if (videoRef.current) {
+                 videoRef.current.srcObject = newStream;
+                 videoRef.current.play();
+            }
+        } catch (e) {
+            console.error("Error switching local camera", e);
+        }
     }
   };
 
@@ -520,9 +569,10 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer }) => {
 
           <button 
             onClick={switchCamera}
-            className="p-3 sm:p-4 rounded-full bg-slate-800 text-slate-300 hover:text-white border border-slate-600"
+            className={`p-3 sm:p-4 rounded-full border transition-all ${useRemoteCamera ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white'}`}
+            title={remoteStream ? "Switch to Mobile Camera" : "Switch Camera"}
           >
-              <SwitchCamera size={24} />
+              {useRemoteCamera ? <Smartphone size={24} /> : <SwitchCamera size={24} />}
           </button>
        </div>
 
