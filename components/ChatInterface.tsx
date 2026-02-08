@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
-import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Camera as CameraIcon, Square, Check, RefreshCw } from 'lucide-react';
+import { Send, User, Bot, Loader2, PenTool, Image as ImageIcon, Paperclip, X, FileText, UploadCloud, Mic, Square, Video } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -13,9 +13,10 @@ interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
   onSendMessage: (text: string, attachment?: string) => void;
+  onStartSession?: () => void;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onStartSession }) => {
   const [inputValue, setInputValue] = useState('');
   const [showDrawingPad, setShowDrawingPad] = useState(false);
   
@@ -27,15 +28,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   
-  // Camera State
+  // Camera/Video State
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+
   const timerIntervalRef = useRef<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -52,6 +59,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, []);
+
+  // Handle video stream assignment
+  useEffect(() => {
+    if (showCamera && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [showCamera, cameraStream]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +84,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   // --- FILE HANDLING ---
   const processFile = (file: File) => {
     if (!file) return;
+
+    // Check for 20MB limit (Gemini API limitation for inlineData in browser)
+    if (file.size > 20 * 1024 * 1024) {
+        alert("File size exceeds 20MB limit for direct uploads. Please upload a shorter clip or compress the video.");
+        return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       setPendingAttachment(reader.result as string);
@@ -106,6 +127,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
   // --- AUDIO RECORDING ---
   const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Audio recording is not supported in this browser.");
+        return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -139,7 +165,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      alert("Could not access microphone.");
+      alert("Could not access microphone. Please ensure a microphone is connected and permissions are granted.");
     }
   };
 
@@ -160,19 +186,45 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // --- CAMERA ---
+  // --- CAMERA & VIDEO RECORDING ---
   const startCamera = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert("Camera access is not supported in this browser.");
+          return;
+      }
+
       try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          // Construct constraints for video recording
+          const constraints: MediaStreamConstraints = {
+              video: { facingMode: 'environment' },
+              audio: true
+          };
+
+          let stream;
+          try {
+              // Try environment (rear) camera first
+              stream = await navigator.mediaDevices.getUserMedia(constraints);
+          } catch (err) {
+              // Fallback to basic constraints
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          }
+          
           setCameraStream(stream);
           setShowCamera(true);
       } catch (err) {
-          console.error("Error accessing camera:", err);
-          alert("Could not access camera.");
+         console.error("Error accessing camera:", err);
+         alert("Could not access camera. Please ensure a camera is connected and permissions are granted.");
       }
   };
 
   const stopCameraStream = () => {
+      // If we are recording video and user closes, we cancel the recording (do not save)
+      if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
+          videoRecorderRef.current.onstop = null; // Remove handler to prevent saving
+          videoRecorderRef.current.stop();
+      }
+      setIsRecordingVideo(false);
+
       if (cameraStream) {
           cameraStream.getTracks().forEach(track => track.stop());
           setCameraStream(null);
@@ -180,18 +232,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
       setShowCamera(false);
   };
 
-  const takePhoto = () => {
-      if (videoRef.current) {
-          const canvas = document.createElement('canvas');
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-              ctx.drawImage(videoRef.current, 0, 0);
-              const dataUrl = canvas.toDataURL('image/jpeg');
-              setPendingAttachment(dataUrl);
-              stopCameraStream();
-          }
+  const startVideoRecording = () => {
+      if (!cameraStream) return;
+      
+      try {
+          const mediaRecorder = new MediaRecorder(cameraStream);
+          videoRecorderRef.current = mediaRecorder;
+          videoChunksRef.current = [];
+
+          mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                  videoChunksRef.current.push(event.data);
+              }
+          };
+
+          mediaRecorder.onstop = () => {
+              const blob = new Blob(videoChunksRef.current, { type: 'video/webm' });
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                  setPendingAttachment(reader.result as string);
+              };
+              reader.readAsDataURL(blob);
+              stopCameraStream(); // Clean exit after save
+          };
+
+          mediaRecorder.start();
+          setIsRecordingVideo(true);
+      } catch (e) {
+          console.error("Failed to start video recorder", e);
+          alert("Failed to start video recording.");
+      }
+  };
+
+  const stopVideoRecording = () => {
+      if (videoRecorderRef.current && isRecordingVideo) {
+          videoRecorderRef.current.stop();
+          setIsRecordingVideo(false);
       }
   };
 
@@ -202,6 +278,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
       
       const isImage = pendingAttachment.startsWith('data:image');
       const isAudio = pendingAttachment.startsWith('data:audio');
+      const isVideo = pendingAttachment.startsWith('data:video');
       
       return (
           <div className="mx-4 mb-2 p-3 bg-slate-900 border border-slate-700 rounded-lg flex items-center justify-between max-w-md animate-fade-in relative group">
@@ -214,6 +291,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                       <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center flex-shrink-0 border border-red-500/30">
                           <Mic className="text-red-400 w-5 h-5" />
                       </div>
+                  ) : isVideo ? (
+                      <div className="w-10 h-10 rounded bg-indigo-900/30 flex items-center justify-center flex-shrink-0 border border-indigo-500/30">
+                          <Video className="text-indigo-400 w-5 h-5" />
+                      </div>
                   ) : (
                       <div className="w-10 h-10 rounded bg-slate-800 flex items-center justify-center flex-shrink-0 border border-slate-600">
                           <FileText className="text-cyan-400 w-5 h-5" />
@@ -221,10 +302,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                   )}
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-200">
-                        {isImage ? 'Image' : isAudio ? 'Audio Clip' : 'Document'}
+                        {isImage ? 'Image' : isAudio ? 'Audio Clip' : isVideo ? 'Video Clip' : 'Document'}
                     </span>
                     <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
-                        Ready to send
+                         {isVideo ? 'Ready to analyze' : 'Ready to send'}
                     </span>
                   </div>
               </div>
@@ -264,8 +345,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                     playsInline 
                     className="max-w-full max-h-full object-contain"
                     onLoadedMetadata={() => videoRef.current?.play()}
-                    srcObject={cameraStream as any}
+                    muted={true} // Mute feedback loop during recording
                   />
+                  {isRecordingVideo && (
+                    <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-900/80 px-3 py-1 rounded-full animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-xs font-bold text-white">REC</span>
+                    </div>
+                  )}
                   <div className="absolute top-4 right-4">
                       <button onClick={stopCameraStream} className="p-2 bg-black/50 rounded-full text-white hover:bg-black/70">
                           <X size={24} />
@@ -273,109 +360,144 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                   </div>
               </div>
               <div className="h-24 bg-slate-900 flex items-center justify-center gap-8">
-                  <button onClick={takePhoto} className="w-16 h-16 rounded-full border-4 border-white bg-transparent hover:bg-white/20 transition-all" />
+                  {isRecordingVideo ? (
+                      <button onClick={stopVideoRecording} className="w-16 h-16 rounded-full border-4 border-red-500 bg-red-500 flex items-center justify-center hover:scale-105 transition-all shadow-[0_0_20px_rgba(239,68,68,0.5)]" title="Stop Recording">
+                          <Square size={24} fill="currentColor" className="text-white" />
+                      </button>
+                  ) : (
+                      <button onClick={startVideoRecording} className="w-16 h-16 rounded-full border-4 border-red-500 bg-transparent flex items-center justify-center hover:bg-red-500/20 transition-all" title="Start Recording">
+                          <div className="w-12 h-12 rounded-full bg-red-500" />
+                      </button>
+                  )}
               </div>
           </div>
       )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6" ref={scrollRef}>
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex items-start gap-4 ${
-              msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-            }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                msg.role === 'user' ? 'bg-cyan-600' : 'bg-emerald-600'
-              }`}
-            >
-              {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-            </div>
-            
-            <div
-              className={`max-w-[85%] rounded-lg p-4 leading-relaxed shadow-lg ${
-                msg.role === 'user'
-                  ? 'bg-slate-800 border border-slate-700 text-slate-100'
-                  : 'bg-slate-900 border border-emerald-900/30 text-slate-200'
-              }`}
-            >
-              {msg.role === 'agent' && msg.metadata?.action && (
-                <div className="mb-2 inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-900/50 text-emerald-400 border border-emerald-800">
-                  {msg.metadata.action}
-                </div>
+        {messages.length === 0 && !isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 p-8 animate-in fade-in zoom-in duration-500">
+              <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center shadow-2xl border border-slate-700">
+                  <Bot size={40} className="text-cyan-400" />
+              </div>
+              <div className="max-w-md space-y-2">
+                  <h2 className="text-2xl font-bold text-white">Ready to Begin?</h2>
+                  <p className="text-slate-400">
+                      I'm your AI tutor. I can assess your current level, guide you through the curriculum, or answer specific questions.
+                  </p>
+              </div>
+              {onStartSession && (
+                  <button 
+                      onClick={onStartSession}
+                      className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold shadow-lg shadow-cyan-900/20 transition-all transform hover:scale-105 flex items-center gap-2"
+                  >
+                      <span>Start Diagnostic Assessment</span>
+                      <Send size={16} />
+                  </button>
               )}
-              
-              {/* Attachment Rendering */}
-              {msg.attachment && (
-                  <div className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black/20">
-                      {msg.attachment.startsWith('data:image') ? (
-                           <img src={msg.attachment} alt="User attachment" className="max-w-full h-auto max-h-[300px]" />
-                      ) : msg.attachment.startsWith('data:audio') ? (
-                           <div className="flex items-center gap-3 p-3 bg-slate-900/80">
-                               <div className="w-10 h-10 bg-red-900/50 rounded-full flex items-center justify-center">
-                                  <Mic className="text-red-400 w-5 h-5" />
-                               </div>
-                               <audio controls src={msg.attachment} className="h-8 max-w-[200px]" />
-                           </div>
-                      ) : (
-                           <div className="flex items-center gap-3 p-3 bg-slate-900/80">
-                               <FileText className="text-cyan-400 w-8 h-8" />
-                               <div className="text-sm font-mono text-slate-300">Document Attached</div>
-                           </div>
-                      )}
-                  </div>
-              )}
-              {/* Legacy Support for 'image' prop if it exists in old messages */}
-              {msg.image && !msg.attachment && (
-                  <div className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black/20">
-                      <img src={msg.image} alt="User attachment" className="max-w-full h-auto max-h-[300px]" />
-                  </div>
-              )}
-
-              <ReactMarkdown 
-                className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0"
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                components={{
-                  code({node, inline, className, children, ...props}: any) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const codeContent = String(children).replace(/\n$/, '');
-
-                    if (!inline && match) {
-                      if (match[1] === 'mermaid') {
-                        return <Mermaid chart={codeContent} />;
-                      }
-                      if (match[1] === 'plot') {
-                        try {
-                           const plotOptions = JSON.parse(codeContent);
-                           return <FunctionPlot options={plotOptions} />;
-                        } catch (e) {
-                           return <div className="text-red-400 text-xs">Invalid Plot JSON</div>;
-                        }
-                      }
-                    }
-
-                    return !inline && match ? (
-                      <div className="rounded-md bg-black/30 border border-white/10 p-3 my-3 overflow-x-auto">
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      </div>
-                    ) : (
-                      <code className="bg-slate-700/50 px-1 py-0.5 rounded text-cyan-200 font-mono text-xs" {...props}>
-                        {children}
-                      </code>
-                    );
-                  }
-                }}
-              >
-                {msg.content}
-              </ReactMarkdown>
-            </div>
           </div>
-        ))}
+        ) : (
+            messages.map((msg) => (
+            <div
+                key={msg.id}
+                className={`flex items-start gap-4 ${
+                msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                }`}
+            >
+                <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    msg.role === 'user' ? 'bg-cyan-600' : 'bg-emerald-600'
+                }`}
+                >
+                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                </div>
+                
+                <div
+                className={`max-w-[85%] rounded-lg p-4 leading-relaxed shadow-lg ${
+                    msg.role === 'user'
+                    ? 'bg-slate-800 border border-slate-700 text-slate-100'
+                    : 'bg-slate-900 border border-emerald-900/30 text-slate-200'
+                }`}
+                >
+                {msg.role === 'agent' && msg.metadata?.action && (
+                    <div className="mb-2 inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-emerald-900/50 text-emerald-400 border border-emerald-800">
+                    {msg.metadata.action}
+                    </div>
+                )}
+                
+                {/* Attachment Rendering */}
+                {msg.attachment && (
+                    <div className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                        {msg.attachment.startsWith('data:image') ? (
+                            <img src={msg.attachment} alt="User attachment" className="max-w-full h-auto max-h-[300px]" />
+                        ) : msg.attachment.startsWith('data:audio') ? (
+                            <div className="flex items-center gap-3 p-3 bg-slate-900/80">
+                                <div className="w-10 h-10 bg-red-900/50 rounded-full flex items-center justify-center">
+                                    <Mic className="text-red-400 w-5 h-5" />
+                                </div>
+                                <audio controls src={msg.attachment} className="h-8 max-w-[200px]" />
+                            </div>
+                        ) : msg.attachment.startsWith('data:video') ? (
+                            <div className="bg-black/50">
+                                <video controls src={msg.attachment} className="max-w-full h-auto max-h-[300px]" />
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3 p-3 bg-slate-900/80">
+                                <FileText className="text-cyan-400 w-8 h-8" />
+                                <div className="text-sm font-mono text-slate-300">Document Attached</div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {/* Legacy Support for 'image' prop if it exists in old messages */}
+                {msg.image && !msg.attachment && (
+                    <div className="mb-3 rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                        <img src={msg.image} alt="User attachment" className="max-w-full h-auto max-h-[300px]" />
+                    </div>
+                )}
+
+                <ReactMarkdown 
+                    className="prose prose-invert prose-sm max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0"
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                    code({node, inline, className, children, ...props}: any) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const codeContent = String(children).replace(/\n$/, '');
+
+                        if (!inline && match) {
+                        if (match[1] === 'mermaid') {
+                            return <Mermaid chart={codeContent} />;
+                        }
+                        if (match[1] === 'plot') {
+                            try {
+                            const plotOptions = JSON.parse(codeContent);
+                            return <FunctionPlot options={plotOptions} />;
+                            } catch (e) {
+                            return <div className="text-red-400 text-xs">Invalid Plot JSON</div>;
+                            }
+                        }
+                        }
+
+                        return !inline && match ? (
+                        <div className="rounded-md bg-black/30 border border-white/10 p-3 my-3 overflow-x-auto">
+                            <code className={className} {...props}>
+                            {children}
+                            </code>
+                        </div>
+                        ) : (
+                        <code className="bg-slate-700/50 px-1 py-0.5 rounded text-cyan-200 font-mono text-xs" {...props}>
+                            {children}
+                        </code>
+                        );
+                    }
+                    }}
+                >
+                    {msg.content}
+                </ReactMarkdown>
+                </div>
+            </div>
+            ))
+        )}
         
         {isLoading && (
           <div className="flex items-start gap-4">
@@ -407,7 +529,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                     type="file" 
                     ref={fileInputRef}
                     className="hidden" 
-                    accept="image/*,application/pdf,audio/*"
+                    accept="image/*,application/pdf,audio/*,video/*"
                     onChange={handleFileSelect}
                 />
                 
@@ -431,7 +553,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                                    title="Attach File"
+                                    title="Attach File (Video, Audio, Image, PDF)"
                                     disabled={isLoading}
                                 >
                                     <Paperclip size={18} />
@@ -449,7 +571,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                                     type="button"
                                     onClick={startRecording}
                                     className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
-                                    title="Record Audio"
+                                    title="Record Audio Clip"
                                     disabled={isLoading}
                                 >
                                     <Mic size={18} />
@@ -457,11 +579,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                                    title="Camera"
+                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                    title="Record Video Clip"
                                     disabled={isLoading}
                                 >
-                                    <CameraIcon size={18} />
+                                    <Video size={18} />
                                 </button>
                             </>
                         )}
@@ -472,8 +594,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onPaste={handlePaste}
-                        placeholder={showDrawingPad ? "Add a caption to your drawing..." : isRecording ? "Recording audio..." : "Type, paste image, or drop file..."}
-                        className="w-full bg-slate-800 text-slate-100 rounded-xl pl-[160px] pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 border border-slate-700 shadow-inner"
+                        placeholder={showDrawingPad ? "Add a caption to your drawing..." : isRecording ? "Recording audio..." : "Type, or start a Live Session..."}
+                        className="w-full bg-slate-800 text-slate-100 rounded-xl pl-[230px] pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 border border-slate-700 shadow-inner"
                         disabled={isLoading || isRecording}
                     />
                     

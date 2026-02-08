@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 interface ErrorBoundaryProps {
   children?: React.ReactNode;
@@ -57,9 +58,13 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+const GOOGLE_CLIENT_ID = "350853045874-v1ppep56c34906vltitosdjae4o24rpb.apps.googleusercontent.com";
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
+  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </GoogleOAuthProvider>
 );

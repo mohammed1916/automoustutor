@@ -31,6 +31,7 @@ export interface Message {
   timestamp: number;
   metadata?: ParsedAgentResponse;
   attachment?: string; // Full Data URL for backward compatibility and simplicity in this refactor
+  image?: string; // Legacy support
 }
 
 export enum AgentAction {
