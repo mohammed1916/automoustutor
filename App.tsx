@@ -78,13 +78,13 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSendMessage = async (text: string, image?: string) => {
+  const handleSendMessage = async (text: string, attachment?: string) => {
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: text,
       timestamp: Date.now(),
-      image: image 
+      attachment: attachment 
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -100,10 +100,10 @@ const App: React.FC = () => {
       // This allows the teacher to know the *new* context immediately.
       
       // Don't route if it's very short (e.g. "ok", "yes") to save API calls, 
-      // unless image is present (image might contain a whole math problem)
-      if (text.length > 5 || image) {
+      // unless attachment is present (image might contain a whole math problem)
+      if (text.length > 5 || attachment) {
         console.log("Analyzing curriculum intent...");
-        const routeResult = await analyzeCurriculumIntent(text, curriculum, image);
+        const routeResult = await analyzeCurriculumIntent(text, curriculum, attachment);
         console.log("Router decision:", routeResult);
 
         if (routeResult.action === 'NAVIGATE' && routeResult.targetWeekId) {
@@ -152,7 +152,20 @@ const App: React.FC = () => {
       const apiHistory = messages.map(m => {
         const parts: any[] = [{ text: m.role === 'agent' ? (m.metadata?.raw || m.content) : m.content }];
         
-        if (m.image) {
+        // Handle previous attachments in history
+        if (m.attachment) {
+            const mimeMatch = m.attachment.match(/^data:(.*?);base64,/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            const cleanBase64 = m.attachment.split(',')[1] || m.attachment;
+            parts.unshift({
+                inlineData: {
+                    mimeType: mimeType,
+                    data: cleanBase64
+                }
+            });
+        }
+        // Handle legacy image field for backward compatibility
+        else if (m.image) {
             const cleanBase64 = m.image.split(',')[1] || m.image;
             parts.unshift({
                 inlineData: {
@@ -175,7 +188,7 @@ const App: React.FC = () => {
       };
 
       // Pass the UPDATED curriculum to the teacher
-      const response = await sendMessageToAgent(text, contextState, apiHistory, image, updatedCurriculum);
+      const response = await sendMessageToAgent(text, contextState, apiHistory, attachment, updatedCurriculum);
 
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -220,7 +233,7 @@ const App: React.FC = () => {
   };
 
   // Calculate overall progress for Home Card
-  const overallProgress = Object.values(learnerState.masteryLevels).reduce((a: number, b: number) => a + b, 0) / curriculum.length;
+  const overallProgress = (Object.values(learnerState.masteryLevels) as number[]).reduce((a, b) => a + b, 0) / (curriculum.length || 1);
 
   // --- VIEW: HOME PAGE ---
   if (view === 'HOME') {

@@ -21,7 +21,7 @@ export interface RoutingDecision {
 export const analyzeCurriculumIntent = async (
   userMessage: string, 
   currentCurriculum: CurriculumWeek[],
-  imageBase64?: string
+  attachmentBase64?: string
 ): Promise<RoutingDecision> => {
   
   if (!process.env.API_KEY) return { action: 'STAY', reasoning: 'No API Key' };
@@ -65,11 +65,14 @@ JSON FORMAT:
 
     const parts: any[] = [{ text: userMessage || "Analyze context." }];
     
-    if (imageBase64) {
-      const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    if (attachmentBase64) {
+      const mimeMatch = attachmentBase64.match(/^data:(.*?);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+      const cleanBase64 = attachmentBase64.split(',')[1] || attachmentBase64;
+      
       parts.unshift({
         inlineData: {
-          mimeType: imageBase64.includes('pdf') ? 'application/pdf' : 'image/png', // Rough check, ideal is strict mime from caller
+          mimeType: mimeType,
           data: cleanBase64
         }
       });

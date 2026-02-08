@@ -175,11 +175,10 @@ export const sendMessageToAgent = async (
   userMessage: string, 
   currentState: LearnerState,
   chatHistory: Array<{role: 'user' | 'model', parts: {text?: string, inlineData?: any}[]}> = [],
-  imageBase64?: string,
-  curriculum?: CurriculumWeek[] // Added dynamic curriculum
+  attachmentBase64?: string,
+  curriculum?: CurriculumWeek[]
 ): Promise<ParsedAgentResponse> => {
   
-  // Ensure Key Check
   if (!process.env.API_KEY) {
      console.warn("API Key missing in process.env");
   }
@@ -188,7 +187,6 @@ export const sendMessageToAgent = async (
     const ai = getAiClient();
     const model = 'gemini-3-flash-preview'; 
 
-    // Construct the full context including the hidden state
     const stateContext = `
 [SYSTEM: CURRENT LEARNER STATE]
 ${JSON.stringify(currentState, null, 2)}
@@ -196,18 +194,15 @@ ${JSON.stringify(currentState, null, 2)}
 
     const finalPrompt = userMessage 
       ? `${userMessage}\n\n${stateContext}`
-      : `[SYSTEM: START_SESSION]\n${stateContext}`; // Initial trigger
+      : `[SYSTEM: START_SESSION]\n${stateContext}`; 
 
-    // Prepare current user parts
     const currentUserParts: any[] = [{ text: finalPrompt }];
 
-    // Attach image/file if present
-    if (imageBase64) {
-      // Extract mime type if available (e.g., "data:image/jpeg;base64,...")
-      const mimeMatch = imageBase64.match(/^data:(.*?);base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-      
-      const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    // Handle generic attachment (Image, Audio, PDF)
+    if (attachmentBase64) {
+      const mimeMatch = attachmentBase64.match(/^data:(.*?);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+      const cleanBase64 = attachmentBase64.split(',')[1] || attachmentBase64;
       
       currentUserParts.unshift({
         inlineData: {
@@ -217,9 +212,6 @@ ${JSON.stringify(currentState, null, 2)}
       });
     }
     
-    // Default to the imported static curriculum if none passed, but this file shouldn't import it directly if avoiding circular deps.
-    // However, for safety, if undefined, we assume the caller handles it or we'll have issues.
-    // In App.tsx we will pass it.
     const dynamicSystemPrompt = curriculum ? generateSystemPrompt(curriculum) : generateSystemPrompt([]); 
 
     const result = await ai.models.generateContent({

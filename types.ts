@@ -18,13 +18,19 @@ export interface ParsedAgentResponse {
   raw: string;
 }
 
+export interface Attachment {
+  type: 'image' | 'audio' | 'pdf' | 'video';
+  mimeType: string;
+  data: string; // Base64 string (without data: prefix if stored separately, or full Data URL)
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'agent' | 'system';
   content: string;
   timestamp: number;
   metadata?: ParsedAgentResponse;
-  image?: string; // Base64 Data URL
+  attachment?: string; // Full Data URL for backward compatibility and simplicity in this refactor
 }
 
 export enum AgentAction {

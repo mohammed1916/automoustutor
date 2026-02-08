@@ -1,5 +1,8 @@
 {
   "name": "Adaptive Math Agent",
   "description": "An autonomous adaptive learning agent for an 11-week undergraduate mathematics curriculum, featuring real-time state tracking and personalized instruction.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }
