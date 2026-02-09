@@ -5,12 +5,16 @@ import { LearnerState, ParsedAgentResponse, CurriculumWeek } from '../types';
 // Initialize lazily to avoid module-level errors if env vars aren't ready
 let aiClient: GoogleGenAI | null = null;
 
-// Use process.env.API_KEY exclusively as per guidelines
+// Use process.env.API_KEY with fallback to import.meta.env
+const getApiKey = () => {
+  return process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+};
+
 const getAiClient = () => {
   if (!aiClient) {
-    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getApiKey();
+    aiClient = new GoogleGenAI({ apiKey });
   }
-
   return aiClient;
 };
 
@@ -181,45 +185,42 @@ export const sendMessageToAgent = async (
   curriculum?: CurriculumWeek[]
 ): Promise<ParsedAgentResponse> => {
   
-  // Use process.env.API_KEY exclusively as per guidelines
-  if (!process.env.API_KEY) {
-     console.warn("API Key missing in process.env");
+  const apiKey = getApiKey();
+  if (!apiKey) {
+     console.warn("API Key missing in both process.env and import.meta.env");
   }
 
-  try {
-    const ai = getAiClient();
-    if (!ai) throw new Error("AI client not initialized");
-    const model = 'gemini-3-flash-preview'; 
-
-    const stateContext = `
+  const stateContext = `
 [SYSTEM: CURRENT LEARNER STATE]
 ${JSON.stringify(currentState, null, 2)}
     `;
 
-    const finalPrompt = userMessage 
-      ? `${userMessage}\n\n${stateContext}`
-      : `[SYSTEM: START_SESSION]\n${stateContext}`; 
+  const finalPrompt = userMessage 
+    ? `${userMessage}\n\n${stateContext}`
+    : `[SYSTEM: START_SESSION]\n${stateContext}`; 
 
-    const currentUserParts: any[] = [{ text: finalPrompt }];
+  const currentUserParts: any[] = [{ text: finalPrompt }];
 
-    // Handle generic attachment (Image, Audio, PDF)
-    if (attachmentBase64) {
-      const mimeMatch = attachmentBase64.match(/^data:(.*?);base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-      const cleanBase64 = attachmentBase64.split(',')[1] || attachmentBase64;
-      
-      currentUserParts.unshift({
-        inlineData: {
-          mimeType: mimeType,
-          data: cleanBase64
-        }
-      });
-    }
+  if (attachmentBase64) {
+    const mimeMatch = attachmentBase64.match(/^data:(.*?);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const cleanBase64 = attachmentBase64.split(',')[1] || attachmentBase64;
     
-    const dynamicSystemPrompt = curriculum ? generateSystemPrompt(curriculum) : generateSystemPrompt([]); 
+    currentUserParts.unshift({
+      inlineData: {
+        mimeType: mimeType,
+        data: cleanBase64
+      }
+    });
+  }
+  
+  const dynamicSystemPrompt = curriculum ? generateSystemPrompt(curriculum) : generateSystemPrompt([]); 
 
-    const result = await ai.models.generateContent({
-      model,
+  const generate = async (modelName: string) => {
+    const ai = getAiClient();
+    if (!ai) throw new Error("AI client not initialized");
+    return await ai.models.generateContent({
+      model: modelName,
       config: {
         systemInstruction: dynamicSystemPrompt,
         temperature: 0.2,
@@ -229,12 +230,21 @@ ${JSON.stringify(currentState, null, 2)}
         { role: 'user', parts: currentUserParts }
       ]
     });
+  };
 
-    const responseText = result.text || '';
-    return parseAgentResponse(responseText);
-
+  try {
+    // Primary try with gemini-3-flash-preview
+    const result = await generate('gemini-3-flash-preview');
+    return parseAgentResponse(result.text || '');
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+    console.warn("Primary model call failed, falling back to lite model:", error);
+    try {
+      // Fallback to gemini-2.5-flash-lite-preview-09-2025
+      const fallbackResult = await generate('gemini-2.5-flash-lite-preview-09-2025');
+      return parseAgentResponse(fallbackResult.text || '');
+    } catch (fallbackError) {
+      console.error("Both primary and fallback models failed:", fallbackError);
+      throw fallbackError;
+    }
   }
 };
