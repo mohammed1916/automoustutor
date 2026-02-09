@@ -123,6 +123,11 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
       handsRef.current = hands;
     }
   };
+  const handleClose = async () => {
+    cleanup();        // stop camera, mic, loops, session
+    onClose();        // close UI / unmount
+  };
+
 
   const cleanup = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -483,7 +488,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
                 <Smartphone size={16} />
                 <span>Transfer</span>
               </button>
-              <button onClick={onClose} className="p-2 bg-black/40 hover:bg-red-900/80 rounded-full text-white border border-white/10">
+              <button onClick={handleClose} className="p-2 bg-black/40 hover:bg-red-900/80 rounded-full text-white border border-white/10">
                   <X size={24} />
               </button>
           </div>
@@ -519,7 +524,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
               <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
                   <div className="bg-red-900/20 border border-red-500/50 p-6 rounded-xl max-w-md text-center">
                       <p className="text-red-200 mb-4">{error}</p>
-                      <button onClick={onClose} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg">
+                      <button onClick={handleClose} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg">
                           Close Session
                       </button>
                   </div>
@@ -554,7 +559,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
           </button>
 
           <button 
-             onClick={onClose}
+             onClick={handleClose}
              className="px-6 py-3 sm:px-8 sm:py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-full shadow-lg flex items-center gap-2"
           >
              <X size={20} />
