@@ -195,7 +195,7 @@ export const sendMessageToAgent = async (
   curriculum?: CurriculumWeek[]
 ): Promise<ParsedAgentResponse> => {
   
-  if (!process.env.API_KEY) {
+  if (!process.env.API_KEY || !import.meta.env.VITE_GEMINI_API_KEY) {
      console.warn("API Key missing in process.env");
   }
 

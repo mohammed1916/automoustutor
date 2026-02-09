@@ -5,7 +5,7 @@ let aiClient: GoogleGenAI | null = null;
 
 const getAiClient = () => {
   if (!aiClient) {
-    const key = process.env.API_KEY || ''; 
+    const key = import.meta.env.VITE_GEMINI_API_KEY|| process.env.API_KEY || ''; 
     aiClient = new GoogleGenAI({ apiKey: key });
   }
   return aiClient;
@@ -24,7 +24,7 @@ export const analyzeCurriculumIntent = async (
   attachmentBase64?: string
 ): Promise<RoutingDecision> => {
   
-  if (!process.env.API_KEY) return { action: 'STAY', reasoning: 'No API Key' };
+  if (!process.env.API_KEY|| !import.meta.env.VITE_GEMINI_API_KEY) {return { action: 'STAY', reasoning: 'No API Key' };}
 
   try {
     const ai = getAiClient();
