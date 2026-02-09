@@ -7,7 +7,7 @@ let aiClient: GoogleGenAI | null = null;
 const getAiClient = () => {
   if (!aiClient) {
     // Fallback to empty string if undefined to prevent constructor throw, though it will fail on call if invalid
-    const key = process.env.API_KEY || ''; 
+    const key = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || ''; 
     aiClient = new GoogleGenAI({ apiKey: key });
   }
   return aiClient;
