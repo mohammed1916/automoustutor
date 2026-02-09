@@ -1,28 +1,14 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { LearnerState, ParsedAgentResponse, CurriculumWeek } from '../types';
 
 // Initialize lazily to avoid module-level errors if env vars aren't ready
 let aiClient: GoogleGenAI | null = null;
 
-// const getAiClient = () => {
-//   if (!aiClient) {
-//     // Fallback to empty string if undefined to prevent constructor throw, though it will fail on call if invalid
-//     const key = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || ''; 
-//     aiClient = new GoogleGenAI({ apiKey: key });
-//   }
-//   return aiClient;
-// };
-
+// Use process.env.API_KEY exclusively as per guidelines
 const getAiClient = () => {
   if (!aiClient) {
-    const key = import.meta.env.VITE_GEMINI_API_KEY;
-
-    if (!key) {
-      console.error("Missing VITE_GEMINI_API_KEY");
-      return null;
-    }
-
-    aiClient = new GoogleGenAI({ apiKey: key });
+    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   return aiClient;
@@ -195,12 +181,14 @@ export const sendMessageToAgent = async (
   curriculum?: CurriculumWeek[]
 ): Promise<ParsedAgentResponse> => {
   
-  if (!process.env.API_KEY || !import.meta.env.VITE_GEMINI_API_KEY) {
+  // Use process.env.API_KEY exclusively as per guidelines
+  if (!process.env.API_KEY) {
      console.warn("API Key missing in process.env");
   }
 
   try {
     const ai = getAiClient();
+    if (!ai) throw new Error("AI client not initialized");
     const model = 'gemini-3-flash-preview'; 
 
     const stateContext = `

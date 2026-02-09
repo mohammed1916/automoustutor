@@ -1,12 +1,13 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { CurriculumWeek } from '../types';
 
 let aiClient: GoogleGenAI | null = null;
 
+// Use process.env.API_KEY exclusively as per guidelines
 const getAiClient = () => {
   if (!aiClient) {
-    const key = import.meta.env.VITE_GEMINI_API_KEY|| process.env.API_KEY || ''; 
-    aiClient = new GoogleGenAI({ apiKey: key });
+    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return aiClient;
 };
@@ -24,7 +25,8 @@ export const analyzeCurriculumIntent = async (
   attachmentBase64?: string
 ): Promise<RoutingDecision> => {
   
-  if (!process.env.API_KEY|| !import.meta.env.VITE_GEMINI_API_KEY) {return { action: 'STAY', reasoning: 'No API Key' };}
+  // Use process.env.API_KEY exclusively as per guidelines
+  if (!process.env.API_KEY) {return { action: 'STAY', reasoning: 'No API Key' };}
 
   try {
     const ai = getAiClient();
