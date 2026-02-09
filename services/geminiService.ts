@@ -4,14 +4,30 @@ import { LearnerState, ParsedAgentResponse, CurriculumWeek } from '../types';
 // Initialize lazily to avoid module-level errors if env vars aren't ready
 let aiClient: GoogleGenAI | null = null;
 
+// const getAiClient = () => {
+//   if (!aiClient) {
+//     // Fallback to empty string if undefined to prevent constructor throw, though it will fail on call if invalid
+//     const key = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || ''; 
+//     aiClient = new GoogleGenAI({ apiKey: key });
+//   }
+//   return aiClient;
+// };
+
 const getAiClient = () => {
   if (!aiClient) {
-    // Fallback to empty string if undefined to prevent constructor throw, though it will fail on call if invalid
-    const key = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY || ''; 
+    const key = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (!key) {
+      console.error("Missing VITE_GEMINI_API_KEY");
+      return null;
+    }
+
     aiClient = new GoogleGenAI({ apiKey: key });
   }
+
   return aiClient;
 };
+
 
 // Helper to parse the strict output format
 const parseAgentResponse = (text: string): ParsedAgentResponse => {
