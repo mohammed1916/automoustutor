@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { X, Mic, MicOff, Video as VideoIcon, VideoOff, SwitchCamera, Smartphone, Fingerprint, Loader2, Sparkles, Zap } from 'lucide-react';
 import { SYSTEM_PROMPT } from '../constants';
+import { YoloDetection, YoloDetector } from '../services/yoloService';
 
 interface LiveSessionProps {
   onClose: () => void;
@@ -43,7 +44,6 @@ declare global {
     drawConnectors: any;
     drawLandmarks: any;
     HAND_CONNECTIONS: any;
-    streamIntervalId?: number;
   }
 }
 
@@ -56,6 +56,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
   const [lastTranscript, setLastTranscript] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [yoloStatus, setYoloStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [useRemoteCamera, setUseRemoteCamera] = useState(false);
@@ -63,6 +64,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
   const videoRef = useRef<HTMLVideoElement>(null);
   const drawingOverlayRef = useRef<HTMLCanvasElement>(null); // For real-time tracker
   const persistentInkRef = useRef<HTMLCanvasElement>(null);  // For cumulative drawing
+  const yoloOverlayRef = useRef<HTMLCanvasElement>(null); // For object detection boxes
   const contextFrameCanvasRef = useRef<HTMLCanvasElement>(null); // For background API streaming
   
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -74,9 +76,14 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
   const nextStartTimeRef = useRef<number>(0);
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const contextIntervalRef = useRef<number | null>(null);
+  const yoloIntervalRef = useRef<number | null>(null);
+  const yoloBusyRef = useRef<boolean>(false);
+  const yoloLastSummaryRef = useRef<string>('');
   
   const handsRef = useRef<any>(null);
   const lastPointRef = useRef<{x: number, y: number} | null>(null);
+  const yoloDetectorRef = useRef<YoloDetector | null>(null);
 
   useEffect(() => {
     initMediaPipe();
@@ -92,7 +99,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
     const width = video.videoWidth || 640;
     const height = video.videoHeight || 480;
 
-    [drawingOverlayRef.current, persistentInkRef.current].forEach(canvas => {
+    [drawingOverlayRef.current, persistentInkRef.current, yoloOverlayRef.current].forEach(canvas => {
       if (canvas) {
         canvas.width = width;
         canvas.height = height;
@@ -130,6 +137,8 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
   const cleanup = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (audioProcessorRef.current) audioProcessorRef.current.disconnect();
+    if (contextIntervalRef.current) clearInterval(contextIntervalRef.current);
+    if (yoloIntervalRef.current) clearInterval(yoloIntervalRef.current);
     if (localAudioStreamRef.current) localAudioStreamRef.current.getTracks().forEach(t => t.stop());
     if (!useRemoteCamera && activeVideoStreamRef.current) {
         activeVideoStreamRef.current.getTracks().forEach(t => t.stop());
@@ -137,7 +146,6 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
     if (inputAudioContextRef.current) inputAudioContextRef.current.close();
     if (outputAudioContextRef.current) outputAudioContextRef.current.close();
     if (handsRef.current) handsRef.current.close();
-    if (window.streamIntervalId) clearInterval(window.streamIntervalId);
     
     sessionPromiseRef.current?.then(session => session.close && session.close());
   };
@@ -171,6 +179,16 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
         videoRef.current.srcObject = videoStream;
         videoRef.current.onloadedmetadata = syncCanvasDimensions;
         videoRef.current.play();
+      }
+
+      try {
+        const detector = new YoloDetector();
+        await detector.init();
+        yoloDetectorRef.current = detector;
+        setYoloStatus('ready');
+      } catch (yoloErr) {
+        console.error('YOLO model initialization failed.', yoloErr);
+        setYoloStatus('error');
       }
 
       const connectWithModel = (modelName: string) => {
@@ -312,6 +330,44 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
     if (ink) ink.getContext('2d')?.clearRect(0, 0, ink.width, ink.height);
   };
 
+  const drawYoloDetections = (detections: YoloDetection[]) => {
+    const canvas = yoloOverlayRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!isVideoOn) return;
+
+    detections.forEach((det) => {
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(det.x, det.y, det.width, det.height);
+
+      const label = `${det.label} ${(det.confidence * 100).toFixed(0)}%`;
+      ctx.font = 'bold 14px sans-serif';
+      const textWidth = ctx.measureText(label).width;
+      const textHeight = 20;
+
+      const x = det.x;
+      const y = Math.max(0, det.y - textHeight);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
+      ctx.fillRect(x, y, textWidth + 12, textHeight);
+
+      ctx.fillStyle = '#111827';
+      ctx.fillText(label, x + 6, y + 15);
+    });
+  };
+
+  const formatYoloSummary = (detections: YoloDetection[]) => {
+    if (detections.length === 0) return 'No clear objects detected in scene.';
+    return detections
+      .slice(0, 4)
+      .map((det) => `${det.label} (${(det.confidence * 100).toFixed(0)}%)`)
+      .join(', ');
+  };
+
   const sendDrawingToAgent = () => {
     if (!persistentInkRef.current || !videoRef.current) return;
     setIsAnalyzing(true);
@@ -368,7 +424,7 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
     loop();
 
     // Context frame streaming for general vision
-    const interval = window.setInterval(() => {
+    contextIntervalRef.current = window.setInterval(() => {
         if (isVideoOn && videoRef.current && contextFrameCanvasRef.current) {
             const ctx = contextFrameCanvasRef.current.getContext('2d');
             if (ctx) {
@@ -380,7 +436,31 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
             }
         }
     }, 5000);
-    window.streamIntervalId = interval;
+
+    yoloIntervalRef.current = window.setInterval(async () => {
+      if (!isVideoOn || !videoRef.current || videoRef.current.readyState < 2) return;
+      if (!yoloDetectorRef.current?.isReady() || yoloBusyRef.current) return;
+
+      yoloBusyRef.current = true;
+      try {
+        const detections = await yoloDetectorRef.current.detect(videoRef.current, 0.38, 5);
+        drawYoloDetections(detections);
+
+        const summary = formatYoloSummary(detections);
+        if (summary !== yoloLastSummaryRef.current) {
+          yoloLastSummaryRef.current = summary;
+          sessionPromiseRef.current?.then((session) => {
+            session.sendRealtimeInput({
+              text: `YOLO scene context: ${summary}`
+            });
+          });
+        }
+      } catch (yoloErr) {
+        console.error('YOLO inference failed.', yoloErr);
+      } finally {
+        yoloBusyRef.current = false;
+      }
+    }, 1400);
   };
 
   const switchCamera = async () => {
@@ -461,6 +541,11 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
             ref={persistentInkRef} 
             className="absolute inset-0 w-full h-full object-cover pointer-events-none z-[104] filter drop-shadow-[0_0_8px_#10b981]" 
           />
+
+          <canvas
+            ref={yoloOverlayRef}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-[103] opacity-90"
+          />
           
           {isDrawingMode && (
               <div className="absolute top-24 px-6 py-2 bg-emerald-600/90 text-white text-[10px] font-black rounded-full border border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.5)] animate-pulse z-[110] flex items-center gap-2 uppercase tracking-widest">
@@ -468,6 +553,17 @@ const LiveSession: React.FC<LiveSessionProps> = ({ onClose, onTransfer, remoteSt
                   Drawing Mode
               </div>
           )}
+
+          <div className={`absolute top-40 px-4 py-2 text-[10px] font-black rounded-full z-[110] flex items-center gap-2 uppercase tracking-widest border ${
+            yoloStatus === 'ready'
+              ? 'bg-amber-500/90 text-black border-amber-300'
+              : yoloStatus === 'loading'
+                ? 'bg-slate-700/90 text-slate-100 border-slate-500'
+                : 'bg-red-600/80 text-white border-red-400'
+          }`}>
+            <Zap size={12} />
+            {yoloStatus === 'ready' ? 'YOLO Active' : yoloStatus === 'loading' ? 'YOLO Loading' : 'YOLO Offline'}
+          </div>
 
           {isAnalyzing && (
               <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center z-[120] backdrop-blur-md">

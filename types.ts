@@ -49,3 +49,39 @@ export interface CurriculumWeek {
   description: string;
   topics: string[];
 }
+
+export interface ModelInfo {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+  supportsVision: boolean;
+  supportsLive: boolean;
+  isLocal?: boolean;
+  runtime?: string | null;
+}
+
+export interface LocalModelRuntimeStatus {
+  available: boolean;
+  ready: boolean;
+  installed: boolean;
+  message: string;
+}
+
+export interface LocalModelStatus extends ModelInfo {
+  modelId: string;
+  status: LocalModelRuntimeStatus;
+}
+
+export interface SetupJob {
+  id: string;
+  type: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  logs: string[];
+  createdAt: number;
+  updatedAt: number;
+  result?: unknown;
+  error?: string | null;
+}

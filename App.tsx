@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { LearnerState, Message, ParsedAgentResponse, CurriculumWeek } from './types';
+import { LearnerState, Message, ParsedAgentResponse, CurriculumWeek, ModelInfo, LocalModelStatus, SetupJob } from './types';
 import { INITIAL_LEARNER_STATE, CURRICULUM_DATA } from './constants';
 import { sendMessageToAgent } from './services/geminiService';
 import { analyzeCurriculumIntent } from './services/routingService';
+import { fetchModels, getStoredModelId, setStoredModelId } from './services/modelService';
+import { fetchLocalModelStatuses, fetchSetupJob, setupLocalModel } from './services/localModelService';
 import { getSession, logout, loadProgress, saveProgress, UserProfile } from './services/storageService';
 import Dashboard from './components/Dashboard';
 import ChatInterface from './components/ChatInterface';
@@ -12,6 +14,7 @@ import TopicSidebar from './components/TopicSidebar';
 import AuthModal from './components/AuthModal';
 import MobileConnectView from './components/MobileConnectView';
 import LiveSession from './components/LiveSession';
+import LocalModelManager from './components/LocalModelManager';
 import { Menu, X, ArrowLeft, GraduationCap, Sparkles, Smartphone, QrCode, Link as LinkIcon, Check, LogOut, User as UserIcon, LogIn } from 'lucide-react';
 import { Peer } from 'peerjs';
 
@@ -32,6 +35,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [lastAgentResponse, setLastAgentResponse] = useState<ParsedAgentResponse | null>(null);
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
+  const [isLocalManagerOpen, setIsLocalManagerOpen] = useState(false);
+  const [isLocalStatusLoading, setIsLocalStatusLoading] = useState(false);
+  const [localModelStatuses, setLocalModelStatuses] = useState<LocalModelStatus[]>([]);
+  const [setupJobsByModelId, setSetupJobsByModelId] = useState<Record<string, SetupJob | undefined>>({});
   
   // Mobile/Layout State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
@@ -94,6 +103,82 @@ const App: React.FC = () => {
             }
         }
     }
+  }, []);
+
+  const refreshLocalStatuses = useCallback(async () => {
+    setIsLocalStatusLoading(true);
+    try {
+      const statuses = await fetchLocalModelStatuses();
+      setLocalModelStatuses(statuses);
+    } catch (error) {
+      console.error('Failed to refresh local model statuses', error);
+    } finally {
+      setIsLocalStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLocalManagerOpen) {
+      refreshLocalStatuses();
+    }
+  }, [isLocalManagerOpen, refreshLocalStatuses]);
+
+  useEffect(() => {
+    const activeEntries = Object.entries(setupJobsByModelId).filter(
+      ([, job]) => job && (job.status === 'queued' || job.status === 'running')
+    );
+    if (activeEntries.length === 0) return;
+
+    const intervalId = window.setInterval(async () => {
+      const updates = await Promise.all(
+        activeEntries.map(async ([modelId, job]) => {
+          try {
+            const fresh = await fetchSetupJob(job!.id);
+            return { modelId, job: fresh };
+          } catch {
+            return { modelId, job };
+          }
+        })
+      );
+
+      setSetupJobsByModelId((prev) => {
+        const next = { ...prev };
+        for (const update of updates) {
+          next[update.modelId] = update.job;
+        }
+        return next;
+      });
+
+      if (updates.some((u) => u.job?.status === 'completed')) {
+        refreshLocalStatuses();
+      }
+    }, 1800);
+
+    return () => window.clearInterval(intervalId);
+  }, [setupJobsByModelId, refreshLocalStatuses]);
+
+  const handleSetupLocalModel = async (modelId: string) => {
+    try {
+      const job = await setupLocalModel(modelId);
+      setSetupJobsByModelId((prev) => ({ ...prev, [modelId]: job }));
+    } catch (error) {
+      console.error('Failed to start local model setup', error);
+    }
+  };
+
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const { models, defaultModelId } = await fetchModels();
+        setAvailableModels(models);
+        const storedModelId = getStoredModelId();
+        const nextModelId = models.some((m) => m.id === storedModelId) ? (storedModelId as string) : defaultModelId;
+        setSelectedModelId(nextModelId);
+      } catch (error) {
+        console.error('Failed to load model list:', error);
+      }
+    };
+    loadModels();
   }, []);
 
   // --- PEERJS INIT (DESKTOP) ---
@@ -185,7 +270,8 @@ const App: React.FC = () => {
           learnerState, 
           [], 
           undefined, 
-          curriculum
+          curriculum,
+          selectedModelId
       );
       
       const newMsg: Message = {
@@ -219,7 +305,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [hasStarted, learnerState, curriculum, messages.length, user]);
+  }, [hasStarted, learnerState, curriculum, messages.length, user, selectedModelId]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
       setUser(loggedInUser);
@@ -264,7 +350,7 @@ const App: React.FC = () => {
 
     try {
       if (text.length > 5 || attachment) {
-        const routeResult = await analyzeCurriculumIntent(text, curriculum, attachment);
+        const routeResult = await analyzeCurriculumIntent(text, curriculum, attachment, selectedModelId);
         if (routeResult.action === 'NAVIGATE' && routeResult.targetWeekId) {
              if (routeResult.targetWeekId !== selectedWeekId) {
                  setSelectedWeekId(routeResult.targetWeekId);
@@ -316,7 +402,14 @@ const App: React.FC = () => {
       });
       
       const contextState = { ...learnerState, currentWeek: currentWeekOverride || learnerState.currentWeek };
-      const response = await sendMessageToAgent(text, contextState, apiHistory, attachment, updatedCurriculum);
+      const response = await sendMessageToAgent(
+        text,
+        contextState,
+        apiHistory,
+        attachment,
+        updatedCurriculum,
+        selectedModelId
+      );
 
       const agentMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -373,6 +466,7 @@ const App: React.FC = () => {
   };
 
   const overallProgress = (Object.values(learnerState.masteryLevels) as number[]).reduce((a, b) => a + b, 0) / (curriculum.length || 1);
+  const selectedModel = availableModels.find((m) => m.id === selectedModelId);
 
   // --- RENDER ---
   if (view === 'MOBILE_CONNECT' && mobileConnectId) {
@@ -394,6 +488,16 @@ const App: React.FC = () => {
         remoteStream={remoteStream}
       />
     )}
+
+    <LocalModelManager
+      isOpen={isLocalManagerOpen}
+      onClose={() => setIsLocalManagerOpen(false)}
+      models={localModelStatuses}
+      isLoading={isLocalStatusLoading}
+      jobsByModelId={setupJobsByModelId}
+      onRefresh={refreshLocalStatuses}
+      onSetup={handleSetupLocalModel}
+    />
 
     {view === 'HOME' ? (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
@@ -453,7 +557,7 @@ const App: React.FC = () => {
            />
            
            <div className="text-slate-600 text-xs font-mono uppercase tracking-widest mt-8">
-               v1.1.0 • Powered by Gemini 2.0 Flash (Multi-Agent System)
+               v1.2.0 • Model: {selectedModel?.label || 'Loading...'}
            </div>
         </div>
       </div>
@@ -481,6 +585,30 @@ const App: React.FC = () => {
                         <span>Navigator Active</span>
                      </div>
                   )}
+                  <div className="hidden md:flex items-center gap-2">
+                    <label className="text-xs text-slate-400">Model</label>
+                    <select
+                      value={selectedModelId}
+                      onChange={(e) => {
+                        const nextModelId = e.target.value;
+                        setSelectedModelId(nextModelId);
+                        setStoredModelId(nextModelId);
+                      }}
+                      className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-md px-2 py-1"
+                    >
+                      {availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setIsLocalManagerOpen(true)}
+                      className="ml-1 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-200 text-xs rounded-md px-2 py-1"
+                    >
+                      Local Setup
+                    </button>
+                  </div>
               </div>
               
               <div className="flex items-center gap-3">
@@ -542,7 +670,7 @@ const App: React.FC = () => {
                   isLoading={isLoading} 
                   onSendMessage={handleSendMessage}
                   onStartSession={startSession}
-                  onStartLiveSession={() => setIsLiveSessionOpen(true)}
+                  onStartLiveSession={selectedModel?.supportsLive ? () => setIsLiveSessionOpen(true) : undefined}
                   remoteStream={remoteStream}
                />
           </div>

@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:backend": "node backend/server.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
@@ -26,7 +27,8 @@
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
     "mermaid": "^10.9.0",
-    "function-plot": "^1.23.3"
+    "function-plot": "^1.23.3",
+    "onnxruntime-web": "^1.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
