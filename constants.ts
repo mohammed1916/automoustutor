@@ -23,67 +23,67 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
 
 export const MATH_CURRICULUM = [
   {
-    id: 'Math Week 1',
+    id: 'Week 1',
     title: 'Set Theory & Foundations',
     description: 'Foundational logic, sets, relations, and functions.',
     topics: ['Number systems', 'Sets and set operations', 'Relations and their types', 'Functions and their types']
   },
   {
-    id: 'Math Week 2',
+    id: 'Week 2',
     title: 'Coordinate Geometry',
     description: 'Slopes, lines, and coordinate systems.',
     topics: ['Rectangular coordinate system', 'Slope of a line', 'Parallel and perpendicular lines', 'Representations of a line', 'General equation of a line', 'Straight-line fit']
   },
   {
-    id: 'Math Week 3',
+    id: 'Week 3',
     title: 'Quadratic Functions',
     description: 'Parabolas, vertices, and quadratic equations.',
     topics: ['Quadratic functions', 'Minima, maxima, vertex, slope', 'Quadratic equations']
   },
   {
-    id: 'Math Week 4',
+    id: 'Week 4',
     title: 'Polynomials',
     description: 'Operations, graphs, and algorithms for polynomials.',
     topics: ['Polynomial operations', 'Polynomial algorithms', 'Graphs of polynomials', 'X-intercepts and multiplicities', 'End behavior', 'Polynomial graph creation']
   },
   {
-    id: 'Math Week 5',
+    id: 'Week 5',
     title: 'Functions',
     description: 'Exponential, composite, and inverse functions.',
     topics: ['Horizontal and vertical line tests', 'Exponential functions', 'Composite functions', 'Inverse functions']
   },
   {
-    id: 'Math Week 6',
+    id: 'Week 6',
     title: 'Logarithmic Functions',
     description: 'Logarithms, properties, and equations.',
     topics: ['Properties of logarithms', 'Graphs of logarithmic functions', 'Exponential equations', 'Logarithmic equations']
   },
   {
-    id: 'Math Week 7',
+    id: 'Week 7',
     title: 'Limits & Continuity',
     description: 'Sequences, limits, and continuous functions.',
     topics: ['Functions of one variable', 'Graphs and tangents', 'Limits of sequences', 'Limits of functions', 'Continuity']
   },
   {
-    id: 'Math Week 8',
+    id: 'Week 8',
     title: 'Derivatives',
     description: 'Differentiation, critical points, and approximation.',
     topics: ['Differentiability and derivatives', 'Computing derivatives', 'L’Hôpital’s rule', 'Tangents and linear approximation', 'Critical points and extrema']
   },
   {
-    id: 'Math Week 9',
+    id: 'Week 9',
     title: 'Integrals',
     description: 'Area under curves and the fundamental theorem.',
     topics: ['Area under a curve', 'Integral of a function', 'Relationship between derivatives and integrals']
   },
   {
-    id: 'Math Week 10',
+    id: 'Week 10',
     title: 'Graph Theory Basics',
     description: 'BFS, DFS, DAGs and graph representations.',
     topics: ['Graph representations', 'Breadth-first search (BFS)', 'Depth-first search (DFS)', 'Applications of BFS/DFS', 'Directed acyclic graphs (DAGs)', 'Complexity analysis', 'Topological sorting']
   },
   {
-    id: 'Math Week 11',
+    id: 'Week 11',
     title: 'Advanced Algorithms',
     description: 'Shortest paths, MSTs, and dynamic programming on graphs.',
     topics: ['Longest path', 'Transitive closure', 'Matrix multiplication for graphs', 'Single-source shortest paths', 'Dijkstra’s algorithm', 'Bellman–Ford algorithm', 'All-pairs shortest paths', 'Floyd–Warshall algorithm', 'Minimum spanning trees', 'Prim’s algorithm', 'Kruskal’s algorithm']

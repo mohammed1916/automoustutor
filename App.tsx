@@ -21,6 +21,15 @@ import { Peer } from 'peerjs';
 import { ViewMode } from './types';
 
 const App: React.FC = () => {
+  const [mathLearnerState, setMathLearnerState] = useState<LearnerState>(INITIAL_LEARNER_STATE);
+  const [cpLearnerState, setCPLearnerState] = useState<LearnerState>({
+    currentWeek: 'CP Week 1',
+    focusTopic: 'Introduction & Problem Solving Basics',
+    masteryLevels: Object.fromEntries(CP_CURRICULUM.map(w => [w.id, 0])),
+    misconceptions: [],
+    lastAction: 'INIT',
+    historySummary: 'New CP student. No prior history.'
+  });
   const [view, setView] = useState<ViewMode>('HOME');
   // User Session State
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -35,7 +44,7 @@ const App: React.FC = () => {
     view === 'COURSE' ? mathCurriculum :
       view === 'CP_COURSE' ? cpCurriculum :
         [];
-  const [learnerState, setLearnerState] = useState<LearnerState>(INITIAL_LEARNER_STATE);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
@@ -83,7 +92,11 @@ const App: React.FC = () => {
       try {
         const decoded = decodeURIComponent(atob(syncData));
         const syncedState = JSON.parse(decoded);
-        setLearnerState(syncedState);
+        if (view === 'COURSE') {
+          setMathLearnerState(syncedState);
+        } else if (view === 'CP_COURSE') {
+          setCPLearnerState(syncedState);
+        }
         if (syncedState.currentWeek) {
           setSelectedWeekId(syncedState.currentWeek);
         }
@@ -99,7 +112,11 @@ const App: React.FC = () => {
         setUser(session);
         const progress = loadProgress(session.id);
         if (progress) {
-          setLearnerState(progress.state);
+          if (view === 'COURSE') {
+            setMathLearnerState(progress.state);
+          } else if (view === 'CP_COURSE') {
+            setCPLearnerState(progress.state);
+          }
           setMessages(progress.messages);
           if (progress.state.currentWeek) {
             setSelectedWeekId(progress.state.currentWeek);
@@ -254,9 +271,10 @@ const App: React.FC = () => {
   // --- SAVE ON UPDATE ---
   useEffect(() => {
     if (user && hasStarted && view !== 'MOBILE_CONNECT') {
-      saveProgress(user.id, learnerState, messages);
+      const currentLearnerState = view === 'COURSE' ? mathLearnerState : view === 'CP_COURSE' ? cpLearnerState : mathLearnerState;
+      saveProgress(user.id, currentLearnerState, messages);
     }
-  }, [user, learnerState, messages, hasStarted, view]);
+  }, [user, mathLearnerState, cpLearnerState, messages, hasStarted, view]);
 
   // --- AGENT SESSION START ---
   const startSession = useCallback(async () => {
@@ -270,9 +288,10 @@ const App: React.FC = () => {
         return;
       }
 
+      const currentLearnerState = view === 'COURSE' ? mathLearnerState : view === 'CP_COURSE' ? cpLearnerState : mathLearnerState;
       const response = await sendMessageToAgent(
         user ? `Hi, I am ${user.name}. Let's begin.` : '',
-        learnerState,
+        currentLearnerState,
         [],
         undefined,
         curriculum,
@@ -291,7 +310,11 @@ const App: React.FC = () => {
       setLastAgentResponse(response);
 
       if (response.memoryUpdate) {
-        setLearnerState(prev => ({ ...prev, ...response.memoryUpdate }));
+        if (view === 'COURSE') {
+          setMathLearnerState(prev => ({ ...prev, ...response.memoryUpdate }));
+        } else if (view === 'CP_COURSE') {
+          setCPLearnerState(prev => ({ ...prev, ...response.memoryUpdate }));
+        }
         if (response.memoryUpdate.currentWeek) {
           setSelectedWeekId(response.memoryUpdate.currentWeek);
         }
@@ -310,19 +333,24 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [hasStarted, learnerState, curriculum, messages.length, user, selectedModelId]);
+  }, [hasStarted, mathLearnerState, cpLearnerState, curriculum, messages.length, user, selectedModelId]);
 
   const handleLoginSuccess = (loggedInUser: UserProfile) => {
     setUser(loggedInUser);
     const progress = loadProgress(loggedInUser.id);
     if (progress) {
-      setLearnerState(progress.state);
+      if (view === 'COURSE') {
+        setMathLearnerState(progress.state);
+      } else if (view === 'CP_COURSE') {
+        setCPLearnerState(progress.state);
+      }
       setMessages(progress.messages);
       if (progress.state.currentWeek) setSelectedWeekId(progress.state.currentWeek);
       setHasStarted(true);
       setView('COURSE');
     } else {
-      saveProgress(loggedInUser.id, learnerState, messages);
+      const currentLearnerState = view === 'COURSE' ? mathLearnerState : view === 'CP_COURSE' ? cpLearnerState : mathLearnerState;
+      saveProgress(loggedInUser.id, currentLearnerState, messages);
     }
   };
 
@@ -330,7 +358,15 @@ const App: React.FC = () => {
     logout();
     setUser(null);
     setView('HOME');
-    setLearnerState(INITIAL_LEARNER_STATE);
+    setMathLearnerState(INITIAL_LEARNER_STATE);
+    setCPLearnerState({
+      currentWeek: 'CP Week 1',
+      focusTopic: 'Introduction & Problem Solving Basics',
+      masteryLevels: Object.fromEntries(CP_CURRICULUM.map(w => [w.id, 0])),
+      misconceptions: [],
+      lastAction: 'INIT',
+      historySummary: 'New CP student. No prior history.'
+    });
     setMessages([]);
     setHasStarted(false);
   };
@@ -352,6 +388,7 @@ const App: React.FC = () => {
 
     let currentWeekOverride: string | undefined;
     let updatedCurriculum = [...curriculum];
+    let setLearnerStateForView = view === 'COURSE' ? setMathLearnerState : setCPLearnerState;
 
     try {
       if (text.length > 5 || attachment) {
@@ -384,7 +421,7 @@ const App: React.FC = () => {
             timestamp: Date.now()
           }]);
 
-          setLearnerState(prev => ({
+          setLearnerStateForView(prev => ({
             ...prev,
             masteryLevels: {
               ...prev.masteryLevels,
@@ -410,7 +447,8 @@ const App: React.FC = () => {
         return { role: m.role === 'agent' ? 'model' : 'user' as 'model' | 'user', parts: parts };
       });
 
-      const contextState = { ...learnerState, currentWeek: currentWeekOverride || learnerState.currentWeek };
+      const currentLearnerState = view === 'COURSE' ? mathLearnerState : view === 'CP_COURSE' ? cpLearnerState : mathLearnerState;
+      const contextState = { ...currentLearnerState, currentWeek: currentWeekOverride || currentLearnerState.currentWeek };
       const response = await sendMessageToAgent(
         text,
         contextState,
@@ -432,7 +470,7 @@ const App: React.FC = () => {
       setLastAgentResponse(response);
 
       if (response.memoryUpdate) {
-        setLearnerState(prev => ({ ...prev, ...response.memoryUpdate }));
+        setLearnerStateForView(prev => ({ ...prev, ...response.memoryUpdate }));
         if (response.memoryUpdate.currentWeek && response.memoryUpdate.currentWeek !== selectedWeekId) {
           setSelectedWeekId(response.memoryUpdate.currentWeek);
         }
@@ -474,7 +512,7 @@ const App: React.FC = () => {
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  const mathProgress = (Object.values(learnerState.masteryLevels) as number[]).reduce((a, b) => a + b, 0) / (mathCurriculum.length || 1);
+  const mathProgress = (Object.values(mathLearnerState.masteryLevels) as number[]).reduce((a, b) => a + b, 0) / (mathCurriculum.length || 1);
   const cpProgress = 0; // You can wire CP progress tracking if needed
   const selectedModel = availableModels.find((m) => m.id === selectedModelId);
 
@@ -665,7 +703,11 @@ const App: React.FC = () => {
             <div className="w-full">
               <WeekTimeline
                 currentWeekId={selectedWeekId}
-                masteryLevels={learnerState.masteryLevels}
+                masteryLevels={
+                  view === 'COURSE' ? mathLearnerState.masteryLevels :
+                    view === 'CP_COURSE' ? cpLearnerState.masteryLevels :
+                      mathLearnerState.masteryLevels
+                }
                 onSelectWeek={setSelectedWeekId}
                 curriculum={
                   view === 'COURSE' ? mathCurriculum :
@@ -680,7 +722,11 @@ const App: React.FC = () => {
             <div className="hidden md:flex w-64 xl:w-72 shrink-0 border-r border-slate-800 bg-slate-900/50 flex-col">
               <TopicSidebar
                 currentWeekId={selectedWeekId}
-                focusTopic={learnerState.focusTopic}
+                focusTopic={
+                  view === 'COURSE' ? mathLearnerState.focusTopic :
+                    view === 'CP_COURSE' ? cpLearnerState.focusTopic :
+                      mathLearnerState.focusTopic
+                }
                 onTopicClick={handleTopicClick}
                 curriculum={
                   view === 'COURSE' ? mathCurriculum :
@@ -708,7 +754,19 @@ const App: React.FC = () => {
               ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
               top-[130px] lg:top-0 h-[calc(100%-130px)] lg:h-full
           `}>
-              <Dashboard state={learnerState} lastAgentResponse={lastAgentResponse} />
+              <Dashboard
+                learnerState={
+                  view === 'COURSE' ? mathLearnerState :
+                    view === 'CP_COURSE' ? cpLearnerState :
+                      mathLearnerState
+                }
+                lastAgentResponse={lastAgentResponse}
+                curriculum={
+                  view === 'COURSE' ? mathCurriculum :
+                    view === 'CP_COURSE' ? cpCurriculum :
+                      mathCurriculum
+                }
+              />
               {isSidebarOpen && user && (
                 <div className="p-4 border-t border-slate-800 lg:hidden">
                   <button onClick={handleLogout} className="w-full py-2 bg-red-900/20 text-red-400 border border-red-900/50 rounded-lg flex items-center justify-center gap-2">
