@@ -21,72 +21,147 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   historySummary: 'New student. No prior history.'
 };
 
-export const CURRICULUM_DATA = [
+export const MATH_CURRICULUM = [
   {
-    id: 'Week 1',
+    id: 'Math Week 1',
     title: 'Set Theory & Foundations',
     description: 'Foundational logic, sets, relations, and functions.',
     topics: ['Number systems', 'Sets and set operations', 'Relations and their types', 'Functions and their types']
   },
   {
-    id: 'Week 2',
+    id: 'Math Week 2',
     title: 'Coordinate Geometry',
     description: 'Slopes, lines, and coordinate systems.',
     topics: ['Rectangular coordinate system', 'Slope of a line', 'Parallel and perpendicular lines', 'Representations of a line', 'General equation of a line', 'Straight-line fit']
   },
   {
-    id: 'Week 3',
+    id: 'Math Week 3',
     title: 'Quadratic Functions',
     description: 'Parabolas, vertices, and quadratic equations.',
     topics: ['Quadratic functions', 'Minima, maxima, vertex, slope', 'Quadratic equations']
   },
   {
-    id: 'Week 4',
+    id: 'Math Week 4',
     title: 'Polynomials',
     description: 'Operations, graphs, and algorithms for polynomials.',
     topics: ['Polynomial operations', 'Polynomial algorithms', 'Graphs of polynomials', 'X-intercepts and multiplicities', 'End behavior', 'Polynomial graph creation']
   },
   {
-    id: 'Week 5',
+    id: 'Math Week 5',
     title: 'Functions',
     description: 'Exponential, composite, and inverse functions.',
     topics: ['Horizontal and vertical line tests', 'Exponential functions', 'Composite functions', 'Inverse functions']
   },
   {
-    id: 'Week 6',
+    id: 'Math Week 6',
     title: 'Logarithmic Functions',
     description: 'Logarithms, properties, and equations.',
     topics: ['Properties of logarithms', 'Graphs of logarithmic functions', 'Exponential equations', 'Logarithmic equations']
   },
   {
-    id: 'Week 7',
+    id: 'Math Week 7',
     title: 'Limits & Continuity',
     description: 'Sequences, limits, and continuous functions.',
     topics: ['Functions of one variable', 'Graphs and tangents', 'Limits of sequences', 'Limits of functions', 'Continuity']
   },
   {
-    id: 'Week 8',
+    id: 'Math Week 8',
     title: 'Derivatives',
     description: 'Differentiation, critical points, and approximation.',
     topics: ['Differentiability and derivatives', 'Computing derivatives', 'L’Hôpital’s rule', 'Tangents and linear approximation', 'Critical points and extrema']
   },
   {
-    id: 'Week 9',
+    id: 'Math Week 9',
     title: 'Integrals',
     description: 'Area under curves and the fundamental theorem.',
     topics: ['Area under a curve', 'Integral of a function', 'Relationship between derivatives and integrals']
   },
   {
-    id: 'Week 10',
+    id: 'Math Week 10',
     title: 'Graph Theory Basics',
     description: 'BFS, DFS, DAGs and graph representations.',
     topics: ['Graph representations', 'Breadth-first search (BFS)', 'Depth-first search (DFS)', 'Applications of BFS/DFS', 'Directed acyclic graphs (DAGs)', 'Complexity analysis', 'Topological sorting']
   },
   {
-    id: 'Week 11',
+    id: 'Math Week 11',
     title: 'Advanced Algorithms',
     description: 'Shortest paths, MSTs, and dynamic programming on graphs.',
     topics: ['Longest path', 'Transitive closure', 'Matrix multiplication for graphs', 'Single-source shortest paths', 'Dijkstra’s algorithm', 'Bellman–Ford algorithm', 'All-pairs shortest paths', 'Floyd–Warshall algorithm', 'Minimum spanning trees', 'Prim’s algorithm', 'Kruskal’s algorithm']
+  }
+];
+
+export const CP_CURRICULUM = [
+  {
+    id: 'CP Week 1',
+    title: 'Introduction & Problem Solving Basics',
+    description: 'Contest formats, platforms, input/output, brute force, time complexity.',
+    topics: ['Contest formats', 'Programming platforms', 'Input/output', 'Brute force', 'Time complexity']
+  },
+  {
+    id: 'CP Week 2',
+    title: 'Arrays & Strings',
+    description: 'Searching, sorting, prefix sums, sliding window, string manipulation.',
+    topics: ['Array searching', 'Sorting', 'Prefix sums', 'Sliding window', 'String manipulation']
+  },
+  {
+    id: 'CP Week 3',
+    title: 'Recursion & Backtracking',
+    description: 'Recursive thinking, backtracking, generating permutations/combinations.',
+    topics: ['Recursion', 'Backtracking', 'Permutations', 'Combinations']
+  },
+  {
+    id: 'CP Week 4',
+    title: 'Greedy Algorithms',
+    description: 'Greedy strategy, interval scheduling, coin change, activity selection.',
+    topics: ['Greedy strategy', 'Interval scheduling', 'Coin change', 'Activity selection']
+  },
+  {
+    id: 'CP Week 5',
+    title: 'Basic Data Structures',
+    description: 'Stacks, queues, linked lists, hash maps, sets.',
+    topics: ['Stacks', 'Queues', 'Linked lists', 'Hash maps', 'Sets']
+  },
+  {
+    id: 'CP Week 6',
+    title: 'Graph Algorithms I',
+    description: 'Graph representation, BFS, DFS, connected components.',
+    topics: ['Graph representation', 'BFS', 'DFS', 'Connected components']
+  },
+  {
+    id: 'CP Week 7',
+    title: 'Graph Algorithms II',
+    description: 'Shortest paths (Dijkstra, Bellman-Ford), topological sort, cycles.',
+    topics: ['Shortest paths', 'Dijkstra', 'Bellman-Ford', 'Topological sort', 'Cycles']
+  },
+  {
+    id: 'CP Week 8',
+    title: 'Dynamic Programming I',
+    description: 'DP basics, memoization, tabulation, classic problems (Fibonacci, knapsack).',
+    topics: ['DP basics', 'Memoization', 'Tabulation', 'Fibonacci', 'Knapsack']
+  },
+  {
+    id: 'CP Week 9',
+    title: 'Dynamic Programming II',
+    description: 'DP on sequences, DP on grids, DP with bitmasking.',
+    topics: ['DP on sequences', 'DP on grids', 'DP with bitmasking']
+  },
+  {
+    id: 'CP Week 10',
+    title: 'Advanced Data Structures',
+    description: 'Trees, heaps, segment trees, binary search trees.',
+    topics: ['Trees', 'Heaps', 'Segment trees', 'Binary search trees']
+  },
+  {
+    id: 'CP Week 11',
+    title: 'Math & Number Theory for CP',
+    description: 'Primes, GCD/LCM, modular arithmetic, combinatorics, probability.',
+    topics: ['Primes', 'GCD', 'LCM', 'Modular arithmetic', 'Combinatorics', 'Probability']
+  },
+  {
+    id: 'CP Week 12',
+    title: 'Contest Strategies & Practice',
+    description: 'Problem selection, debugging, speed, mock contests, post-mortem analysis.',
+    topics: ['Problem selection', 'Debugging', 'Speed', 'Mock contests', 'Post-mortem analysis']
   }
 ];
 

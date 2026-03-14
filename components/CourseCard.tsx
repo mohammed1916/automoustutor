@@ -5,9 +5,11 @@ import { BookOpen, Calendar, ChevronRight, Play, BarChart3, Clock } from 'lucide
 interface CourseCardProps {
   onStart: () => void;
   progress: number;
+  title?: string;
+  subtitle?: string;
 }
 
-const CourseCard: React.FC<CourseCardProps> = ({ onStart, progress }) => {
+const CourseCard: React.FC<CourseCardProps> = ({ onStart, progress, title = "Mathematics I", subtitle = "Undergraduate Curriculum" }) => {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 30 }}
@@ -34,8 +36,8 @@ const CourseCard: React.FC<CourseCardProps> = ({ onStart, progress }) => {
         {/* Center: Details */}
         <div className="flex-1 space-y-4 text-center md:text-left">
           <div>
-            <h2 className="text-3xl font-bold text-slate-100 group-hover:text-white transition-colors">Mathematics I</h2>
-            <h3 className="text-lg text-slate-400 font-medium">Undergraduate Curriculum</h3>
+            <h2 className="text-3xl font-bold text-slate-100 group-hover:text-white transition-colors">{title}</h2>
+            <h3 className="text-lg text-slate-400 font-medium">{subtitle}</h3>
           </div>
           
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-slate-500 py-2">

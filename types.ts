@@ -1,3 +1,4 @@
+export type ViewMode = 'HOME' | 'COURSE' | 'CP_COURSE' | 'MOBILE_CONNECT';
 
 export interface LearnerState {
   currentWeek: string;
