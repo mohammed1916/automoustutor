@@ -633,7 +633,11 @@ const App: React.FC = () => {
                 </button>
                 <div className="h-4 w-px bg-slate-800 hidden sm:block"></div>
                 <div>
-                  <h1 className="font-bold text-slate-100 text-sm md:text-base leading-none">Mathematics I</h1>
+                  <h1 className="font-bold text-slate-100 text-sm md:text-base leading-none">
+                    {view === 'COURSE' && 'Mathematics I'}
+                    {view === 'CP_COURSE' && 'Competitive Programming'}
+                    {view !== 'COURSE' && view !== 'CP_COURSE' && 'Course Dashboard'}
+                  </h1>
                 </div>
                 {isRouting && (
                   <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-900/30 border border-indigo-500/30 text-indigo-400 text-xs animate-pulse">
