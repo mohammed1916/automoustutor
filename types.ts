@@ -60,13 +60,24 @@ export interface ModelInfo {
   supportsLive: boolean;
   isLocal?: boolean;
   runtime?: string | null;
+  baseUrl?: string | null;
 }
+
+export type LocalModelIssue =
+  | 'ready'
+  | 'missing_cli'
+  | 'endpoint_unreachable'
+  | 'model_missing'
+  | 'manual_setup_required'
+  | 'unsupported'
+  | 'unknown';
 
 export interface LocalModelRuntimeStatus {
   available: boolean;
   ready: boolean;
   installed: boolean;
   message: string;
+  issue?: LocalModelIssue;
 }
 
 export interface LocalModelStatus extends ModelInfo {

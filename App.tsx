@@ -188,6 +188,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSelectLocalModel = (modelId: string) => {
+    setSelectedModelId(modelId);
+    setStoredModelId(modelId);
+  };
+
   useEffect(() => {
     const loadModels = async () => {
       try {
@@ -543,8 +548,10 @@ const App: React.FC = () => {
         models={localModelStatuses}
         isLoading={isLocalStatusLoading}
         jobsByModelId={setupJobsByModelId}
+        selectedModelId={selectedModelId}
         onRefresh={refreshLocalStatuses}
         onSetup={handleSetupLocalModel}
+        onSelectModel={handleSelectLocalModel}
       />
 
       {view === 'HOME' ? (

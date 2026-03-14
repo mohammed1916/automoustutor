@@ -83,7 +83,8 @@ export const getOllamaModelStatus = async (modelConfig) => {
       available: false,
       ready: false,
       installed: false,
-      message: 'Ollama CLI not found. Install Ollama first.'
+      message: 'Ollama CLI not found. Install Ollama first.',
+      issue: 'missing_cli'
     };
   }
 
@@ -93,7 +94,8 @@ export const getOllamaModelStatus = async (modelConfig) => {
       available: false,
       ready: false,
       installed: false,
-      message: 'Ollama is installed but not reachable on local endpoint.'
+      message: 'Ollama is installed but not reachable on local endpoint.',
+      issue: 'endpoint_unreachable'
     };
   }
 
@@ -104,7 +106,8 @@ export const getOllamaModelStatus = async (modelConfig) => {
     available: true,
     ready: installed,
     installed,
-    message: installed ? 'Installed and ready.' : 'Not downloaded yet.'
+    message: installed ? 'Installed and ready.' : 'Not downloaded yet.',
+    issue: installed ? 'ready' : 'model_missing'
   };
 };
 

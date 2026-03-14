@@ -2,7 +2,8 @@ export const getOpenAICompatModelStatus = async () => ({
   available: false,
   ready: false,
   installed: false,
-  message: 'Auto-download is not supported for generic OpenAI-compatible runtimes.'
+  message: 'Auto-download is not supported for generic OpenAI-compatible runtimes.',
+  issue: 'manual_setup_required'
 });
 
 export const setupOpenAICompatModel = async (modelConfig, job, updateJob) => {

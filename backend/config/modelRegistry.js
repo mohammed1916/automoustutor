@@ -83,7 +83,7 @@ export const getModelById = (modelId) => {
 };
 
 export const getPublicModels = () =>
-  MODEL_REGISTRY.map(({ id, label, provider, model, supportsVision, supportsLive, isLocal, runtime }) => ({
+  MODEL_REGISTRY.map(({ id, label, provider, model, supportsVision, supportsLive, isLocal, runtime, baseUrl }) => ({
     id,
     label,
     provider,
@@ -91,5 +91,6 @@ export const getPublicModels = () =>
     supportsVision,
     supportsLive,
     isLocal: Boolean(isLocal),
-    runtime: runtime || null
+    runtime: runtime || null,
+    baseUrl: baseUrl || null
   }));

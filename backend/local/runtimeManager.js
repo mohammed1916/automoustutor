@@ -5,7 +5,7 @@ import { getOpenAICompatModelStatus, setupOpenAICompatModel } from './openAiComp
 
 const getStatusForModel = async (model) => {
   if (!model.isLocal) {
-    return { available: true, ready: true, installed: true, message: 'Remote provider.' };
+    return { available: true, ready: true, installed: true, message: 'Remote provider.', issue: 'ready' };
   }
   if (model.runtime === 'ollama') {
     return getOllamaModelStatus(model);
@@ -13,7 +13,7 @@ const getStatusForModel = async (model) => {
   if (model.runtime === 'openai_compatible') {
     return getOpenAICompatModelStatus(model);
   }
-  return { available: false, ready: false, installed: false, message: 'Unsupported local runtime.' };
+  return { available: false, ready: false, installed: false, message: 'Unsupported local runtime.', issue: 'unsupported' };
 };
 
 export const getLocalModelStatuses = async () => {
