@@ -369,7 +369,11 @@ const App: React.FC = () => {
           }
         } else if (routeResult.action === 'ADD_MODULE' && routeResult.newModule) {
           updatedCurriculum = [...curriculum, routeResult.newModule];
-          setCurriculum(updatedCurriculum);
+          if (view === 'COURSE') {
+            setMathCurriculum(updatedCurriculum);
+          } else if (view === 'CP_COURSE') {
+            setCPCurriculum(updatedCurriculum);
+          }
           setSelectedWeekId(routeResult.newModule.id);
           currentWeekOverride = routeResult.newModule.id;
 
