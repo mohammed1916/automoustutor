@@ -142,7 +142,7 @@ const LocalModelManager: React.FC<LocalModelManagerProps> = ({
 
           {!isLoading && models.length === 0 && (
             <div className="text-slate-400 text-sm">
-              No local models are configured.
+              No local models are configured. IF OLLAMA IS INSTALLED BUT NOT RUNNING, START IT AND REFRESH THIS PAGE.
               <div className="mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 p-4 text-xs text-amber-200">
                 <div className="font-semibold text-sm mb-2">Getting Started</div>
                 <div className="space-y-1.5">

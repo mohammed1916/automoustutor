@@ -670,7 +670,10 @@ const App: React.FC = () => {
                     ))}
                   </select>
                   <button
-                    onClick={() => setIsLocalManagerOpen(true)}
+                    onClick={() => {
+                      refreshLocalStatuses();
+                      setIsLocalManagerOpen(true);
+                    }}
                     className="ml-1 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-200 text-xs rounded-md px-2 py-1"
                   >
                     Local Setup
