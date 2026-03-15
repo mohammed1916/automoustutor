@@ -141,7 +141,27 @@ const LocalModelManager: React.FC<LocalModelManagerProps> = ({
           )}
 
           {!isLoading && models.length === 0 && (
-            <div className="text-slate-400 text-sm">No local models are configured.</div>
+            <div className="text-slate-400 text-sm">
+              No local models are configured.
+              <div className="mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 p-4 text-xs text-amber-200">
+                <div className="font-semibold text-sm mb-2">Getting Started</div>
+                <div className="space-y-1.5">
+                  <div>To use local models, you need to install <span className="font-bold">Ollama</span> or another compatible runtime.</div>
+                  <div>
+                    <a
+                      href="https://ollama.com/download"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline text-amber-300 hover:text-amber-100"
+                    >
+                      Download Ollama
+                    </a>
+                  </div>
+                  <div>After installing, open Ollama once to start the local runtime.</div>
+                  <div>Then, configure a model in your settings or environment and refresh this screen.</div>
+                </div>
+              </div>
+            </div>
           )}
 
           {models.map((model) => {
